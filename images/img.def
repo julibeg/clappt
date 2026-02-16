@@ -96,6 +96,7 @@ From: debian:bookworm-slim
 
     # add EXTRA_PATHS to the PATH if provided
     if [ -n "$EXTRA_PATHS" ] ; then
+        echo "INFO: Adding '$EXTRA_PATHS' to PATH"
         export PATH="$EXTRA_PATHS:$PATH"
     fi
 
