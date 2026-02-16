@@ -27,9 +27,10 @@ mv "$SETTINGS.tmp" "$SETTINGS"
 # don't have to expose the actual host path when binding to the container)
 RELATIVE_SCRIPT_DIR="$(realpath --relative-to="$HOME/.claude" "$SCRIPT_DIR")"
 
-pushd ~/.claude
-ln -sf "$RELATIVE_SCRIPT_DIR" .
-popd
+(
+  cd ~/.claude
+  ln -sf "$RELATIVE_SCRIPT_DIR" .
+)
 
 echo -n "Updated hooks in '$SETTINGS' and symlinked '$SCRIPT_DIR' to '~/.claude/hooks' "
 echo "(using the relative path '$RELATIVE_SCRIPT_DIR')"
