@@ -4,10 +4,6 @@ set -euo pipefail
 
 IMAGE="oras://docker.io/julibeg/clappt:latest"
 
-CONDA_ACTIVE_ENV_BIN="/home/user/micromamba/envs/$CONDA_DEFAULT_ENV/bin"
-CONDA_CLI_UTILS_BIN="/home/user/micromamba/envs/cli-utils/bin"
-CLAUDE_BIN="/home/user/.local/bin"
-
 extra_args=()
 test_hooks=false
 
@@ -117,12 +113,6 @@ apptainer_flags=(
     "--cleanenv"
     "--containall"
     "--home" "${tmp_home}:/home/user"
-    # micromamba env vars and binds into an array
-    "--bind" "$(realpath "$(which micromamba)"):/usr/bin/micromamba:ro"
-    "--bind" "$MAMBA_ROOT_PREFIX:/home/user/micromamba:ro"
-    "--env" MAMBA_ROOT_PREFIX=/home/user/micromamba
-    "--env" MAMBA_EXE=/usr/bin/micromamba
-    "--env" EXTRA_PATHS="$CONDA_ACTIVE_ENV_BIN:$CLAUDE_BIN:$CONDA_CLI_UTILS_BIN"
     # binds needed by CC
     "--bind" "$HOME/.claude:/home/user/.claude"
     "--bind" "$HOME/.claude.json:/home/user/.claude.json"
@@ -130,6 +120,53 @@ apptainer_flags=(
     "--bind" "$HOME/.local/share/claude:/home/user/.local/share/claude"
     "--bind" "$HOME/.local/state/claude:/home/user/.local/state/claude"
 )
+
+# we keep track of all paths (inside the container) that we want to add to PATH to make
+# claude, micromamba, and rust work
+extra_paths=("/home/user/.local/bin")
+
+# if we got micromamba, set it up inside the container (using appropriate env vars and
+# binds); this way all conda envs are available in the container through `micromamba
+# run -n ...`
+if [[ -n "${MAMBA_ROOT_PREFIX:-}" && -d "$MAMBA_ROOT_PREFIX" ]] &&
+    command -v micromamba &>/dev/null; then
+    apptainer_flags+=("--bind" "$MAMBA_ROOT_PREFIX:/home/user/micromamba:ro")
+    apptainer_flags+=("--env" MAMBA_ROOT_PREFIX=/home/user/micromamba)
+
+    micromamba_path=$(realpath "$(which micromamba)")
+    apptainer_flags+=("--bind" "$micromamba_path:/usr/bin/micromamba:ro")
+    apptainer_flags+=("--env" MAMBA_EXE=/usr/bin/micromamba)
+
+    # if we're in a conda env currently and its bin exists, add it to the extra paths
+    if [[ -n "${CONDA_PREFIX:-}" && -d "$CONDA_PREFIX/bin" ]]; then
+        if [[ "$CONDA_PREFIX" == "$MAMBA_ROOT_PREFIX"/* ]]; then
+            container_conda_bin=${CONDA_PREFIX/$MAMBA_ROOT_PREFIX/"/home/user/micromamba"}/bin
+            extra_paths+=("$container_conda_bin")
+        fi
+    fi
+
+    # same if we got a 'cli-utils' conda env
+    if [[ -d "$MAMBA_ROOT_PREFIX/envs/cli-utils/bin" ]]; then
+        extra_paths+=("/home/user/micromamba/envs/cli-utils/bin")
+    fi
+fi
+
+# add cargo and rustup if they exist
+if [[ -d "$HOME/.cargo" ]]; then
+    if [[ ! -d "$HOME/.rustup" || ! -d "$HOME/.cargo/bin" ]]; then
+        >&2 echo "ERROR: found ~/.cargo, but ~/.rustup or ~/.cargo/bin is missing"
+        exit 1
+    fi
+    apptainer_flags+=(
+        "--bind" "$HOME/.cargo:/home/user/.cargo:ro"
+        "--bind" "$HOME/.rustup:/home/user/.rustup:ro"
+    )
+    extra_paths+=("/home/user/.cargo/bin")
+fi
+
+# join the extra paths (use sub-shell to scope IFS change)
+extra_paths_joined=$(IFS=":"; echo "${extra_paths[*]}")
+apptainer_flags+=("--env" EXTRA_PATHS="$extra_paths_joined")
 
 # add scrubber if we have it
 if [[ -n "$path_to_scrub" ]]; then

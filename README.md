@@ -5,29 +5,39 @@ Provides hooks for scrubbing secrets (email addresses, API keys, etc.) from tool
 You need to provide a scrubber executable (`scrub`) on `PATH` when running `clappt` for the scrubbing hooks to work.
 Ideally this executable is a binary so that the agent can't read the source and glean the secrets.
 A simple way to create a binary from a shell script is to use [shc](https://github.com/neurobin/shc).
+`shc` is available inside the container.
 
-**IMPORTANT**: This does not intend to be actual security (especially against prompt injection attacks or similar).
-It just tries to pick the low-hanging fruit in terms of sending less sensitive info to the LLM.
+**IMPORTANT**: This does not provide actual security (especially against prompt injection attacks or similar).
+If a coding agent has tool-calling permissions and really wants to gain sensitive information, it can.
+This Apptainer image & wrapper script (alongside the Claude Code hooks) just try to marginally improve privacy by filtering what is sent to the LLM.
 
-## What it provides
+## The wrapper and container
 
-- An Apptainer container that masks host user name and paths for Claude Code usage (it overlays `/etc/passwd` and `/etc/group` to replace the host username with `user` and binds the current working directory to a masked path under `/work` in the container). Overlaying `/etc/passwd` and `/etc/group` is hacky, but provides enough obfuscation without breaking things (in most cases).
-- Hooks for:
-  - Scrubbing secrets from `Read` and `Bash` tool call outputs before they reach the LLM (requires a `scrub` executable on `PATH` when running the wrapper script).
-  - Running Ruff on Python files.
-- Testing support to verify hooks work correctly.
+The wrapper masks the host user name and paths inside the container.
+It overlays `/etc/passwd` and `/etc/group` to replace the host username with `user` and binds the current working directory to a masked path under `/work`.
+Overlaying `/etc/passwd` and `/etc/group` is hacky, but provides obfuscation without breaking things in most cases.
 
-## Hooks setup
+If the host has `micromamba` installed (`MAMBA_ROOT_PREFIX` is set, the directory it points to exists, and the `micromamba` command is available), the wrapper sets up the container so that:
 
-Use the helper script to install the hooks in your Claude settings and symlink the hooks directory into `~/.claude`:
+- you / the agent can use any conda env with `micromamba run -n <env-name> ...` inside the container
+- the binaries installed in the currently active conda/mamba env are available
+- the binaries installed in an env called `cli-utils` (if it exists) are available
+
+If the host has Rust installed (i.e. `~/.cargo` and `~/.rustup` exist), it is also made available inside the container.
+
+## Claude Code hooks
+
+`clappt` comes with a small set of hooks for scrubbing tool call output before it reaches the agent as well as running ruff on edited Python files.
+
+### Hooks setup
+
+Use the helper script to install the hooks in `~/.claude/settings.json` and symlink the hooks directory into `~/.claude`:
 
 ```bash
 ./hooks/add-hooks-to-settings-and-symlink.sh
 ```
 
-This updates `~/.claude/settings.json` and ensures `~/.claude/hooks` points at the repo hooks directory.
-
-## Hooks testing
+### Hooks testing
 
 Run the built-in test mode:
 
@@ -45,7 +55,7 @@ Example output of Claude Code for the hooks test:
 ```md
 Perfect! Here are the results of the hooks setup tests:
 
-## Results
+#### Results
 
 1. **Read tool vs Read tool on .txt files:**
    - `test-1.txt` via Read: Shows full content with line numbers ("hi 1", "hi 2", "hi 3", blank line)
