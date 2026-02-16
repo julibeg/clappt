@@ -1,0 +1,252 @@
+#!/bin/bash
+
+set -euo pipefail
+
+IMAGE="oras://docker.io/julibeg/clappt:latest"
+
+CONDA_ACTIVE_ENV_BIN="/home/user/micromamba/envs/$CONDA_DEFAULT_ENV/bin"
+CONDA_CLI_UTILS_BIN="/home/user/micromamba/envs/cli-utils/bin"
+CLAUDE_BIN="/home/user/.local/bin"
+
+extra_args=()
+test_hooks=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --test-hooks)
+        test_hooks=true
+        shift
+        ;;
+    --image)
+        if [[ $# -lt 2 ]]; then
+            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--image IMAGE] [-- <apptainer args>]"
+            exit 1
+        fi
+        IMAGE="$(realpath "$2")"
+        shift 2
+        ;;
+    --)
+        shift
+        extra_args+=("$@")
+        break
+        ;;
+    *)
+        extra_args+=("$1")
+        shift
+        ;;
+    esac
+done
+
+# create temp dir for all our temporary files
+tmp_dir=$(mktemp -d)
+# make sure we clean up after ourselves regardless of how the script exits
+trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
+
+# prepare temp home dir for the container
+tmp_home="${tmp_dir}/home"
+mkdir -p "$tmp_home"
+
+path_to_scrub=""
+
+warn_if_text_scrub() {
+    local scrub_path="$1"
+    local encoding=""
+
+    encoding=$(file -b --mime-encoding "$scrub_path" || true)
+    if [[ -z "$encoding" ]]; then
+        >&2 echo "ERROR: failed to determine mime encoding for '$scrub_path'"
+        exit 1
+    fi
+
+    if [[ "$encoding" != "binary" ]]; then
+        >&2 echo -n "WARNING: 'scrub' appears to be a plain text script ("
+        >&2 echo "${encoding}); it could be read to glean secrets it scrubs"
+    fi
+}
+
+if [[ "$test_hooks" == true ]]; then
+    # hook-testing mode: make sure we got `~/.claude/hooks`, that it's a symlink, and
+    # that there is a `test` subdir inside the symlink target
+    hooks_dir="$(realpath "$HOME/.claude/hooks")"
+    hook_test_dir="$(realpath "$hooks_dir/test")"
+    if [[ ! -d "$hooks_dir" || ! -L "$HOME/.claude/hooks" || ! -d "$hook_test_dir" ]]; then
+        >&2 echo -n "ERROR: for testing hooks, '~/.claude/hooks' needs to be a symlink "
+        >&2 echo "and have a directory 'test' inside its target"
+        exit 1
+    fi
+    # use the test `scrub` for testing the claude hooks setup (and make sure it's
+    # executable)
+    path_to_scrub="$(realpath "$hook_test_dir/scrub")"
+    if [[ ! -x "$path_to_scrub" ]]; then
+        >&2 echo -n "ERROR: found scrub for hooks testing at '$path_to_scrub', "
+        >&2 echo "but it's not executable"
+        exit 1
+    fi
+    warn_if_text_scrub "$path_to_scrub"
+    # copy directory with test files to temp location and cd into it (so that the
+    # container can work in there)
+    test_workdir="${tmp_dir}/hooks-tests"
+    cp -r "$hook_test_dir/test-files/" "$test_workdir"
+    cd "$test_workdir"
+
+    # unless there are extra args, run the hooks test
+    if [[ ${#extra_args[@]} -eq 0 ]]; then
+        extra_args=(
+            "bash" "-c"
+            "cat prompt.md | claude -p --permission-mode acceptEdits"
+        )
+    fi
+else
+    # check if we got an executable `scrub` that we can bind (used by hooks for
+    # scrubbing secrets from files / tool calls)
+    if command -v scrub &>/dev/null; then
+        path_to_scrub=$(realpath "$(which scrub)")
+        if [[ ! -x "$path_to_scrub" ]]; then
+            >&2 echo "ERROR: found 'scrub', but it's not executable: '$path_to_scrub'"
+            exit 1
+        fi
+        warn_if_text_scrub "$path_to_scrub"
+    else
+        >&2 echo -n "WARNING: 'scrub' not found in PATH; hooks that rely on it will "
+        >&2 echo "fail; is this intended?"
+    fi
+fi
+
+# put all apptainer flags into an array
+apptainer_flags=(
+    "--cleanenv"
+    "--containall"
+    "--home" "${tmp_home}:/home/user"
+    # micromamba env vars and binds into an array
+    "--bind" "$(realpath "$(which micromamba)"):/usr/bin/micromamba:ro"
+    "--bind" "$MAMBA_ROOT_PREFIX:/home/user/micromamba:ro"
+    "--env" MAMBA_ROOT_PREFIX=/home/user/micromamba
+    "--env" MAMBA_EXE=/usr/bin/micromamba
+    "--env" EXTRA_PATHS="$CONDA_ACTIVE_ENV_BIN:$CLAUDE_BIN:$CONDA_CLI_UTILS_BIN"
+    # binds needed by CC
+    "--bind" "$HOME/.claude:/home/user/.claude"
+    "--bind" "$HOME/.claude.json:/home/user/.claude.json"
+    "--bind" "$HOME/.local/bin/claude:/home/user/.local/bin/claude"
+    "--bind" "$HOME/.local/share/claude:/home/user/.local/share/claude"
+    "--bind" "$HOME/.local/state/claude:/home/user/.local/state/claude"
+)
+
+# add scrubber if we have it
+if [[ -n "$path_to_scrub" ]]; then
+    apptainer_flags+=("--bind" "$path_to_scrub:/usr/bin/scrub:ro")
+fi
+
+# resolve symlinks in `~/.claude` that point outside it (e.g. `hooks` or `skills`), and
+# bind their targets into the container so the symlinks work from inside
+while IFS= read -r link; do
+    target=$(readlink -f "$link") || target=""
+    if [[ -z "$target" || ! -e "$target" ]]; then
+        >&2 echo "ERROR: dangling or broken symlink '${link}'; fix your ~/.claude dir"
+        exit 1
+    fi
+
+    if [[ "$target" == "$HOME/.claude/"* ]]; then
+        # target is inside ~/.claude (i.e. already covered by the main bind)
+        continue
+    fi
+
+    # check if target is relative or absolute (if relative, we can bind to a different
+    # path which obfuscates the path on the host; if absolute and outside ~/.claude, we
+    # have to bind to the same path and thus expose it inside the container)
+    target_raw=$(readlink "$link") # readlink w/o -f gives the raw target w/o resolving
+    if [[ "$target_raw" == /* ]]; then
+        # absolute target outside ~/.claude — bind to the same path
+        >&2 echo -n "WARNING: symlink '$link' points to an absolute path outside "
+        # shellcheck disable=SC2088
+        >&2 echo -n "~/.claude ('$target'); this path will be exposed inside the "
+        >&2 echo "container; consider changing the symlink to a relative path"
+        bind_target="$target"
+    else
+        # relative target outside ~/.claude — bind to a path inside the container that
+        # mirrors the relative path, which obfuscates the host path; we achieve this by
+        # replacing $HOME in the absolute target with /home/user
+        bind_target=${target/$HOME/'/home/user'}
+    fi
+
+    apptainer_flags+=("--bind" "${target}:${bind_target}")
+done < <(find "$HOME/.claude" -maxdepth 1 -type l)
+
+# if we got playwright installed (usually located in ~/.cache/ms-playwright), bind its
+# location as well
+if [[ -d "$HOME/.cache/ms-playwright" ]]; then
+    apptainer_flags+=(
+        "--bind" "$HOME/.cache/ms-playwright:/home/user/.cache/ms-playwright:ro"
+    )
+fi
+
+# mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
+work_dir_name=$(basename "$PWD")
+work_dir_hash=$(printf "%s" "$PWD" | sha256sum | cut -c1-12)
+masked_work_dir="/work/${work_dir_hash}/${work_dir_name}"
+
+# create patched passwd and group files to overlay in the container's /etc
+tmp_passwd="${tmp_dir}/passwd"
+tmp_group="${tmp_dir}/group"
+
+echo "user:x:$(id -u):$(id -g):User:/home/user:/bin/bash" >"$tmp_passwd"
+echo "user:x:$(id -g):" >"$tmp_group"
+
+# add to the flags
+apptainer_flags+=(
+    "--pwd" "$masked_work_dir"
+    "--bind" "$PWD:$masked_work_dir"
+    "--bind" "$tmp_passwd:/etc/passwd:ro"
+    "--bind" "$tmp_group:/etc/group:ro"
+)
+
+# check if we're in a linked git worktree (i.e. not the main worktree). If that's the
+# case, find the main worktree and bind it into the container as well. We then overwrite
+# the .git file of the current dir (which is just a text file containing "gitdir:
+# /path/to/main/worktree/.git/worktrees/<worktree_name>") with another bind to contain
+# the modified path (the one that we bind to in the container)
+if [ -f "$PWD/.git" ]; then
+    # .git is a file and not a dir --> might be a linked (i.e. secondary) worktree
+    gitdir_line=$(head -n 1 "$PWD/.git" || true)
+    if [[ "$gitdir_line" == gitdir:* ]]; then
+        # linked worktree confirmed --> get the path to the main worktree's .git dir
+        gitdir_path=${gitdir_line#gitdir: }
+
+        # by default the gitdir path is absolute, but it also works with relavite paths
+        # and we should handle both
+        if [[ "$gitdir_path" == /* ]]; then
+            abs_gitdir_path="$gitdir_path"
+        else
+            abs_gitdir_path=$(realpath "$PWD/$gitdir_path")
+        fi
+
+        # the gitdir path points to /path/to/main/worktree/.git/worktrees/<name>; let's
+        # assert the path has indeed the expected format and get the path to the main
+        # worktrere's .git dir
+        worktree_name=$(basename "$abs_gitdir_path")
+        if [[ "$gitdir_path" != */.git/worktrees/$worktree_name ]]; then
+            >&2 echo "ERROR: Unexpected gitdir path format: $gitdir_path"
+            exit 1
+        fi
+        main_git_dir=${abs_gitdir_path%%/.git/*}/.git
+
+        # we bind the main .git dir to a fixed, known location inside the container and
+        # rewrite the worktree name portion of the path accordingly
+        container_git_dir="/main-worktree/.git"
+        container_gitdir_path="${container_git_dir}/worktrees/${worktree_name}"
+
+        # create a patched .git file pointing to the container-internal path
+        tmp_gitfile="${tmp_dir}/dotgit"
+        echo "gitdir: ${container_gitdir_path}" >"$tmp_gitfile"
+
+        # bind the main worktree's .git dir to our fixed location, and overlay the
+        # linked worktree's .git file with our patched version
+        apptainer_flags+=(
+            # we don't make the main .git dir read-only so that we can still modify the
+            # stash etc in the container
+            "--bind" "${main_git_dir}:${container_git_dir}"
+            "--bind" "${tmp_gitfile}:${masked_work_dir}/.git:ro"
+        )
+    fi
+fi
+
+apptainer run "${apptainer_flags[@]}" "$IMAGE" "${extra_args[@]}"

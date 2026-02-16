@@ -1,0 +1,50 @@
+name: Build and publish Apptainer image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/img.def
+      - .github/workflows/build-publish.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  USERNAME: julibeg
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Apptainer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:apptainer/ppa
+          sudo apt-get update
+          sudo apt-get install -y apptainer
+
+      - name: Build image
+        run: |
+          ./images/build.sh
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+            echo "$DOCKERHUB_TOKEN" | apptainer registry login --username "$USERNAME" --password-stdin docker://docker.io
+
+      - name: Publish image (latest and commit)
+        env:
+          GIT_SHA: ${{ github.sha }}
+          IMAGE_REPO: docker.io/${{ env.USERNAME }}/clappt
+        run: |
+            apptainer push "images/img.sif" "oras://${IMAGE_REPO}:latest"
+            apptainer push "images/img.sif" "oras://${IMAGE_REPO}:${GIT_SHA}"

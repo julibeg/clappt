@@ -1,0 +1,42 @@
+#!/bin/bash
+# .claude/hooks/scrub-reads.sh
+# intercepts Read tool calls and scrubs secrets from file content,
+# respecting offset/limit for partial reads
+
+set -euo pipefail
+
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+OFFSET=$(echo "$INPUT" | jq -r '.tool_input.offset // empty')
+LIMIT=$(echo "$INPUT" | jq -r '.tool_input.limit // empty')
+
+if [ -z "$FILE_PATH" ] || [ ! -f "$FILE_PATH" ]; then
+    exit 0
+fi
+
+RAW=$(
+    awk -v offset="${OFFSET:-1}" -v limit="${LIMIT:-0}" \
+        'NR >= offset && (limit == 0 || NR - offset < limit)' \
+        "$FILE_PATH"
+)
+
+# scrub and compare with raw; if different, return the scrubbed content to the agent;
+# otherwise just exit
+SCRUBBED=$(printf '%s' "$RAW" | scrub)
+
+if [ "$SCRUBBED" = "$RAW" ]; then
+    exit 0
+fi
+
+reason="Potentially sensitive content in the file. Scrubbed content:"
+
+jq -n \
+    --arg content "$SCRUBBED" \
+    --arg reason "$reason" \
+    '{
+        hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: ($reason + "\n" + $content)
+        }
+    }'

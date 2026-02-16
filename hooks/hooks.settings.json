@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=~/.claude/hooks/hook-router; test -f \"$FILE\" && test -x \"$FILE\" || { >&2 echo 'HOOK ERROR! FIX SETUP!'; exit 2; }; \"$FILE\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=~/.claude/hooks/hook-router; test -f \"$FILE\" && test -x \"$FILE\" || { >&2 echo 'HOOK ERROR! FIX SETUP!'; exit 2; }; \"$FILE\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=~/.claude/hooks/hook-router; test -f \"$FILE\" && test -x \"$FILE\" || { >&2 echo 'HOOK ERROR! FIX SETUP!'; exit 2; }; \"$FILE\""
+          }
+        ]
+      }
+    ]
+  }
+}

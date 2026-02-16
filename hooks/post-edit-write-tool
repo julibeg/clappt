@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# read the JSON input from stdin
+input=$(cat)
+
+# check if ruff is available
+if ! command -v ruff &> /dev/null; then
+    jq -n '{"continue": false, "stopReason": "cannot find ruff"}'
+    exit 0
+fi
+
+# get file path from the JSON input
+file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+
+# check if we got a python file
+if [[ -z "$file_path" || "$file_path" != *.py ]]; then
+    exit 0
+fi
+
+# run ruff check --fix and capture output
+check_output=$(ruff check --fix "$file_path" 2>&1)
+check_exit_code=$?
+
+# only send feedback if there are unfixed issues
+if [[ $check_exit_code -ne 0 && -n "$check_output" ]]; then
+    jq -n --arg output "$check_output" '{
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": ("ruff found issues in the file you just edited:\n" + $output + "\nPlease fix them.")
+        }
+    }'
+fi
+
+exit 0

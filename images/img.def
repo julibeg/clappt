@@ -1,0 +1,108 @@
+Bootstrap: docker
+From: debian:bookworm-slim
+
+%labels
+    Description Minimal container with Playwright deps (masks $HOME and $USER)
+
+%help
+    The container masks the user name and HOME dir. It includes playwright deps
+    and the env var EXTRA_PATHS allows for adding extra paths to the Bash entry
+    point.
+
+%arguments
+    HOME_DIR=/home/user
+    USER=user
+
+%post
+    # create neutral home directory
+    mkdir -p {{ HOME_DIR }}
+
+    # install essentials and:
+    # - poppler-utils (needed by CC to read PDFs natively)
+    # - imagemagick (to crop images etc.)
+    apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        bash \
+        ca-certificates \
+        vim \
+        less \
+        jq \
+        poppler-utils \
+        imagemagick
+
+    # pdf and image manipulation stuff
+    apt-get install -y --no-install-recommends \
+        poppler-utils \
+        imagemagick
+
+    # install playwright deps (we don't need to install playwright itself in the
+    # container; we can just bind ~/.cache/ms-playwright from the host)
+    apt-get install -y --no-install-recommends \
+        libasound2 \
+        libatk-bridge2.0-0 \
+        libatk1.0-0 \
+        libatspi2.0-0 \
+        libcairo2 \
+        libcups2 \
+        libdbus-1-3 \
+        libdrm2 \
+        libgbm1 \
+        libglib2.0-0 \
+        libnspr4 \
+        libnss3 \
+        libpango-1.0-0 \
+        libx11-6 \
+        libxcb1 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxkbcommon0 \
+        libxrandr2
+
+    # deps for shc (can be used to create encrypted scripts, e.g. for secrets
+    # scrubbing; keep in mind that, while better than nothing, the obfuscation
+    # provided by `shc` is rather weak)
+    apt-get install -y --no-install-recommends \
+        gcc make automake autoconf libc6-dev
+
+    # clone and build shc
+    tempdir="$(mktemp -d)"
+    cd "$tempdir"
+    git clone https://github.com/neurobin/shc.git
+    cd shc
+    ./autogen.sh
+    ./configure
+    make
+    mv src/shc /usr/bin/shc
+
+    # clean up
+    apt-get autoremove -y
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+%environment
+    export SHELL=/bin/bash
+    export HOME={{ HOME_DIR }}
+    export USER={{ USER }}
+    export LOGNAME={{ USER }}
+    export XDG_CACHE_HOME={{ HOME_DIR }}/.cache
+    export XDG_CONFIG_HOME={{ HOME_DIR }}/.config
+    export XDG_DATA_HOME={{ HOME_DIR }}/.local/share
+    export PATH={{ HOME_DIR }}/bin:$PATH
+
+%runscript
+    #!/bin/bash
+
+    # add EXTRA_PATHS to the PATH if provided
+    if [ -n "$EXTRA_PATHS" ] ; then
+        export PATH="$EXTRA_PATHS:$PATH"
+    fi
+
+    if [ $# -eq 0 ]; then
+        # no args provided: just run bash
+        exec /bin/bash
+    else
+        # pass through whatever the user sent
+        exec "$@"
+    fi

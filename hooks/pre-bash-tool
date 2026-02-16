@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+import json
+import shutil
+import sys
+
+input_data = json.load(sys.stdin)
+
+if input_data.get("tool_name") != "Bash":
+    sys.exit(0)
+
+# make sure `scrub` is on the path and executable
+if not shutil.which("scrub"):
+    sys.stderr.write("scrub not available\n")
+    sys.exit(2)
+
+original_command = input_data.get("tool_input", {}).get("command", "")
+
+# wrap the command
+wrapped = original_command + " 2>&1 | scrub"
+
+# there are other options to wrap the command, but hey have issues:
+# - wrapped = f"bash-san -c {shlex.quote(original_command)}"
+#   - This is is nice because it gives us full control over how to handle both stdout
+#     and stderr in the bash-san script, but, if `bash-san` is added to the allow-list,
+#     it allows all commands to be run and we'd lose granular control
+# - wrapped = f"{original_command} 2> >(scrub >&2) > >(scrub)"
+#   - This is too much bash magic which claude apparently doesn't like and so it doesn't
+#     ask us if we want to allow it anymore (i.e. we have to rely on the hard-coded
+#     "allow" or "ask" in the JSON input and then we're asked every time or never)
+
+output = {
+    "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        # "permissionDecision": "allow",
+        # "permissionDecision": "ask",
+        "updatedInput": {"command": wrapped},
+    }
+}
+print(json.dumps(output))

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Single router for all Claude Code hooks.
+# Dispatches to the correct hook script based on hook_event_name and tool_name.
+
+set -euo pipefail
+
+HOOKS_DIR="$(dirname "$(realpath "$0")")"
+
+INPUT=$(cat)
+EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
+TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
+
+case "$EVENT" in
+  PreToolUse)
+    case "$TOOL" in
+      Bash) HOOK="$HOOKS_DIR/pre-bash-tool" ;;
+      Read) HOOK="$HOOKS_DIR/pre-read-tool" ;;
+      *)
+        >&2 echo "Unexpected tool for $EVENT: $TOOL"
+        exit 2
+        ;;
+    esac
+    ;;
+  PostToolUse)
+    case "$TOOL" in
+      Edit|Write) HOOK="$HOOKS_DIR/post-edit-write-tool" ;;
+      *)
+        >&2 echo "Unexpected tool for $EVENT: $TOOL"
+        exit 2
+        ;;
+    esac
+    ;;
+  *)
+    >&2 echo "Unexpected event: $EVENT"
+    exit 2
+    ;;
+esac
+
+if [[ ! -f "$HOOK" || ! -x "$HOOK" ]]; then
+  echo "Hook for event $EVENT and tool $TOOL not found or not executable: $HOOK" >&2
+  exit 2
+fi
+
+echo "$INPUT" | exec "$HOOK"
