@@ -26,9 +26,7 @@ From: debian:bookworm-slim
         ca-certificates \
         vim \
         less \
-        jq \
-        poppler-utils \
-        imagemagick
+        jq
 
     # pdf and image manipulation stuff
     apt-get install -y --no-install-recommends \
