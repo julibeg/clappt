@@ -24,6 +24,7 @@ From: debian:bookworm-slim
         git \
         bash \
         ca-certificates \
+        iputils-ping \
         vim \
         less \
         jq
