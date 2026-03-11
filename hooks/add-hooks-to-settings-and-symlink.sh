@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Replaces the "hooks" field in ~/.claude/settings.json with the one from hooks.settings.json
+# Replaces the "hooks" field in `~/.claude/settings.json` with the one from
+# `hooks.settings.json`
 
 set -euo pipefail
 
