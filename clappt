@@ -119,6 +119,14 @@ apptainer_flags=(
     "--bind" "$HOME/.local/bin/claude:/home/user/.local/bin/claude"
     "--bind" "$HOME/.local/share/claude:/home/user/.local/share/claude"
     "--bind" "$HOME/.local/state/claude:/home/user/.local/state/claude"
+    # binds needed by Codex (no need to bind location of the executable because it's in
+    # cli-utils micromamba env)
+    "--bind" "$HOME/.codex:/home/user/.codex"
+    # bind mounts for uv
+    "--bind" "$HOME/.config/uv:/home/user/.config/uv:ro"
+    "--bind" "$HOME/.local/bin/uv:/home/user/.local/bin/uv:ro"
+    "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv:ro"
+    "--bind" "$HOME/.cache:/home/user/.cache/uv"
 )
 
 # we keep track of all paths (inside the container) that we want to add to PATH to make
