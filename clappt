@@ -181,6 +181,15 @@ if [[ -n "$path_to_scrub" ]]; then
     apptainer_flags+=("--bind" "$path_to_scrub:/usr/bin/scrub:ro")
 fi
 
+# add fish if present
+if command -v fish &>/dev/null; then
+    path_to_fish=$(realpath "$(which fish)")
+    if [[ ! -x "$path_to_fish" ]]; then
+        >&2 echo "ERROR: found 'fish', but it's not executable: '$path_to_scrub'"
+    fi
+    apptainer_flags+=("--bind" "$path_to_fish:/usr/bin/fish:ro")
+fi
+
 # resolve symlinks in `~/.claude` that point outside it (e.g. `hooks` or `skills`), and
 # bind their targets into the container so the symlinks work from inside
 while IFS= read -r link; do
