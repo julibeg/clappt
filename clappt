@@ -6,6 +6,7 @@ IMAGE="oras://docker.io/julibeg/clappt:latest"
 
 extra_args=()
 test_hooks=false
+writeable_mm_env=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -13,9 +14,17 @@ while [[ $# -gt 0 ]]; do
         test_hooks=true
         shift
         ;;
+    --writeable-mm-env)
+        if [[ $# -lt 2 ]]; then
+            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
+            exit 1
+        fi
+        writeable_mm_env="$2"
+        shift 2
+        ;;
     --image)
         if [[ $# -lt 2 ]]; then
-            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--image IMAGE] [-- <apptainer args>]"
+            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
             exit 1
         fi
         IMAGE="$(realpath "$2")"
@@ -139,6 +148,23 @@ extra_paths=("/home/user/.local/bin")
 if [[ -n "${MAMBA_ROOT_PREFIX:-}" && -d "$MAMBA_ROOT_PREFIX" ]] &&
     command -v micromamba &>/dev/null; then
     apptainer_flags+=("--bind" "$MAMBA_ROOT_PREFIX:/home/user/micromamba:ro")
+
+    # check if mamba env should be writeable
+    if [[ -n "$writeable_mm_env" ]]; then
+        writeable_env_dir="$MAMBA_ROOT_PREFIX/envs/$writeable_mm_env"
+        # make sure the env actually exists
+        if [[ ! -d "$writeable_env_dir" ]]; then
+            >&2 echo "ERROR: mamba env dir not found: '$writeable_env_dir'"
+            exit 1
+        fi
+        # make micromamba root env writeable (i.e. drop `:ro` from last flag in array)
+        apptainer_flags[-1]="$MAMBA_ROOT_PREFIX:/home/user/micromamba"
+        # make `micromamba/envs` read-only and add another mount to only make the target
+        # env writeable
+        apptainer_flags+=("--bind" "$MAMBA_ROOT_PREFIX/envs:/home/user/micromamba/envs:ro")
+        apptainer_flags+=("--bind" "$writeable_env_dir:/home/user/micromamba/envs/$writeable_mm_env")
+    fi
+
     apptainer_flags+=("--env" MAMBA_ROOT_PREFIX=/home/user/micromamba)
 
     micromamba_path=$(realpath "$(which micromamba)")
