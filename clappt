@@ -122,6 +122,9 @@ apptainer_flags=(
     "--cleanenv"
     "--containall"
     "--home" "${tmp_home}:/home/user"
+    # config and cache is generally needed for various tools
+    "--bind" "$HOME/.config:/home/user/.config:ro"
+    "--bind" "$HOME/.cache:/home/user/.cache"
     # binds needed by CC
     "--bind" "$HOME/.claude:/home/user/.claude"
     "--bind" "$HOME/.claude.json:/home/user/.claude.json"
@@ -132,10 +135,13 @@ apptainer_flags=(
     # cli-utils micromamba env)
     "--bind" "$HOME/.codex:/home/user/.codex"
     # bind mounts for uv
-    "--bind" "$HOME/.config/uv:/home/user/.config/uv:ro"
     "--bind" "$HOME/.local/bin/uv:/home/user/.local/bin/uv:ro"
     "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv:ro"
-    "--bind" "$HOME/.cache:/home/user/.cache/uv"
+    # bind mounts for pixi
+    "--bind" "$HOME/.pixi:/home/user/.pixi"
+    "--bind" "$HOME/.pixi/bin/pixi:/usr/bin/pixi"
+    # some other bits
+    "--env" "EDITOR=vim"
 )
 
 # we keep track of all paths (inside the container) that we want to add to PATH to make
@@ -216,8 +222,8 @@ if command -v fish &>/dev/null; then
     apptainer_flags+=("--bind" "$path_to_fish:/usr/bin/fish:ro")
 fi
 
-# resolve symlinks in `~/.claude` that point outside it (e.g. `hooks` or `skills`), and
-# bind their targets into the container so the symlinks work from inside
+# resolve symlinks in `~/.claude` and `~/.codex` that point outside it (e.g. `hooks` or
+# `skills`), and bind their targets into the container so the symlinks work from inside
 while IFS= read -r link; do
     target=$(readlink -f "$link") || target=""
     if [[ -z "$target" || ! -e "$target" ]]; then
@@ -249,15 +255,7 @@ while IFS= read -r link; do
     fi
 
     apptainer_flags+=("--bind" "${target}:${bind_target}")
-done < <(find "$HOME/.claude" -maxdepth 1 -type l)
-
-# if we got playwright installed (usually located in ~/.cache/ms-playwright), bind its
-# location as well
-if [[ -d "$HOME/.cache/ms-playwright" ]]; then
-    apptainer_flags+=(
-        "--bind" "$HOME/.cache/ms-playwright:/home/user/.cache/ms-playwright:ro"
-    )
-fi
+done < <(find "$HOME/.claude" "$HOME/.codex" -maxdepth 1 -type l)
 
 # mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
 work_dir_name=$(basename "$PWD")
