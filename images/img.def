@@ -99,6 +99,10 @@ From: debian:bookworm-slim
         export PATH="$EXTRA_PATHS:$PATH"
     fi
 
+    # write PATH to file so that we can tell Codex to source it before running
+    # tools
+    echo "PATH=$PATH" > ~/.env.path
+
     if [ $# -eq 0 ]; then
         # no args provided: just run bash
         exec /bin/bash
