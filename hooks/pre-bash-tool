@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import json
+import pathlib
+import subprocess
 import shutil
 import sys
 
@@ -13,10 +15,40 @@ if not shutil.which("scrub"):
     sys.stderr.write("scrub not available\n")
     sys.exit(2)
 
+# make sure `rtk` is on the path and executable
+if not shutil.which("rtk"):
+    sys.stderr.write("rtk not available\n")
+    sys.exit(2)
+
 original_command = input_data.get("tool_input", {}).get("command", "")
+updated_input = input_data.get("tool_input", {}).copy()
+rtk_output = {}
+
+rtk_rewrite_path = pathlib.Path(__file__).resolve().parent / "rtk-rewrite.sh"
+if not rtk_rewrite_path.exists():
+    sys.stderr.write("rtk-rewrite.sh not available\n")
+    sys.exit(2)
+
+try:
+    result = subprocess.run(
+        [str(rtk_rewrite_path)],
+        input=json.dumps(input_data),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        parsed = json.loads(result.stdout)
+        hook_output = parsed.get("hookSpecificOutput", {})
+        candidate_updated = hook_output.get("updatedInput")
+        if isinstance(candidate_updated, dict):
+            updated_input = candidate_updated.copy()
+        rtk_output = hook_output
+except (OSError, json.JSONDecodeError):
+    pass
 
 # wrap the command
-wrapped = original_command.strip()
+wrapped = updated_input.get("command", original_command).strip()
 if not wrapped.endswith("2>&1"):
     wrapped += " 2>&1"
 wrapped += " | scrub"
@@ -34,9 +66,22 @@ wrapped += " | scrub"
 output = {
     "hookSpecificOutput": {
         "hookEventName": "PreToolUse",
-        # "permissionDecision": "allow",
-        # "permissionDecision": "ask",
-        "updatedInput": {"command": wrapped},
+        "updatedInput": {**updated_input, "command": wrapped},
     }
 }
+
+permission_decision = rtk_output.get("permissionDecision")
+if permission_decision is not None:
+    valid_permission_decisions = {"allow", "ask", "deny", "defer"}
+    if permission_decision not in valid_permission_decisions:
+        sys.stderr.write(
+            f"invalid permissionDecision from rtk-rewrite.sh: {permission_decision}\n"
+        )
+        sys.exit(2)
+    output["hookSpecificOutput"]["permissionDecision"] = permission_decision
+
+permission_reason = rtk_output.get("permissionDecisionReason")
+if isinstance(permission_reason, str) and permission_reason:
+    output["hookSpecificOutput"]["permissionDecisionReason"] = permission_reason
+
 print(json.dumps(output))
