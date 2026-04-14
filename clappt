@@ -98,7 +98,7 @@ if [[ "$test_hooks" == true ]]; then
     if [[ ${#extra_args[@]} -eq 0 ]]; then
         extra_args=(
             "bash" "-c"
-            "cat prompt.md | claude -p --permission-mode acceptEdits"
+            "cat prompt.md | claude -p --permission-mode acceptEdits --model haiku"
         )
     fi
 else
