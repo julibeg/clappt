@@ -10,12 +10,15 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 OFFSET=$(echo "$INPUT" | jq -r '.tool_input.offset // empty')
 LIMIT=$(echo "$INPUT" | jq -r '.tool_input.limit // empty')
 
+OFFSET="${OFFSET:-1}"
+LIMIT="${LIMIT:-0}"
+
 if [ -z "$FILE_PATH" ] || [ ! -f "$FILE_PATH" ]; then
     exit 0
 fi
 
 RAW=$(
-    awk -v offset="${OFFSET:-1}" -v limit="${LIMIT:-0}" \
+    awk -v offset="$OFFSET" -v limit="$LIMIT" \
         'NR >= offset && (limit == 0 || NR - offset < limit)' \
         "$FILE_PATH"
 )
@@ -27,6 +30,14 @@ SCRUBBED=$(printf '%s' "$RAW" | scrub)
 if [ "$SCRUBBED" = "$RAW" ]; then
     exit 0
 fi
+
+SCRUBBED=$(
+    # add empty line to end of content (mirrors Claude's `Read` tool)
+    printf '%s' "$SCRUBBED" \
+    | awk -v start="$OFFSET" '
+        { print (start + NR - 1) "\t" $0 } END { print (start + NR) "\t" "" }
+    '
+)
 
 reason="Potentially sensitive content in the file. Scrubbed content:"
 
