@@ -134,6 +134,8 @@ apptainer_flags=(
     # binds needed by Codex (no need to bind location of the executable because it's in
     # cli-utils micromamba env)
     "--bind" "$HOME/.codex:/home/user/.codex"
+    # binds for pi
+    "--bind" "$HOME/.pi:/home/user/.pi"
     # bind mounts for uv
     "--bind" "$HOME/.local/bin/uv:/home/user/.local/bin/uv:ro"
     "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv:ro"
@@ -222,40 +224,53 @@ if command -v fish &>/dev/null; then
     apptainer_flags+=("--bind" "$path_to_fish:/usr/bin/fish:ro")
 fi
 
-# resolve symlinks in `~/.claude` and `~/.codex` that point outside it (e.g. `hooks` or
-# `skills`), and bind their targets into the container so the symlinks work from inside
+# helper func to check if a value is in an array (used below)
+in_array() {
+  local -n arr="$1"
+  local value="$2"
+  
+  for item in "${arr[@]}"; do
+    if [[ "$item" == "$value" ]]; then
+      return 0
+    fi
+  done
+  
+  return 1
+}
+
+# resolve symlinks in `~/.claude`, `~/.codex`, and `~/.pi` that point outside it (e.g.
+# `hooks` or `skills`), and bind their targets into the container so the symlinks work
+# from inside
 while IFS= read -r link; do
     target=$(readlink -f "$link") || target=""
     if [[ -z "$target" || ! -e "$target" ]]; then
-        >&2 echo "ERROR: dangling or broken symlink '${link}'; fix your ~/.claude dir"
+        >&2 echo "ERROR: dangling or broken symlink '${link}'"
         exit 1
     fi
 
-    if [[ "$target" == "$HOME/.claude/"* ]]; then
-        # target is inside ~/.claude (i.e. already covered by the main bind)
-        continue
-    fi
-
     # check if target is relative or absolute (if relative, we can bind to a different
-    # path which obfuscates the path on the host; if absolute and outside ~/.claude, we
+    # path which obfuscates the path on the host; if absolute we
     # have to bind to the same path and thus expose it inside the container)
     target_raw=$(readlink "$link") # readlink w/o -f gives the raw target w/o resolving
     if [[ "$target_raw" == /* ]]; then
-        # absolute target outside ~/.claude — bind to the same path
-        >&2 echo -n "WARNING: symlink '$link' points to an absolute path outside "
+        # absolute target --> bind to the same path
+        >&2 echo -n "WARNING: symlink '$link' points to an absolute path "
         # shellcheck disable=SC2088
-        >&2 echo -n "~/.claude ('$target'); this path will be exposed inside the "
+        >&2 echo -n "('$target'); this path will be exposed inside the "
         >&2 echo "container; consider changing the symlink to a relative path"
         bind_target="$target"
     else
-        # relative target outside ~/.claude — bind to a path inside the container that
+        # relative target --> bind to a path inside the container that
         # mirrors the relative path, which obfuscates the host path; we achieve this by
         # replacing $HOME in the absolute target with /home/user
         bind_target=${target/$HOME/'/home/user'}
     fi
 
-    apptainer_flags+=("--bind" "${target}:${bind_target}")
-done < <(find "$HOME/.claude" "$HOME/.codex" -maxdepth 1 -type l)
+    # only add bind if not already present (multiple links pointing to the same target)
+    if ! in_array apptainer_flags "${target}:${bind_target}"; then
+        apptainer_flags+=("--bind" "${target}:${bind_target}")
+    fi
+done < <(find "$HOME/.claude" "$HOME/.codex" "$HOME/.pi" -maxdepth 1 -type l)
 
 # mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
 work_dir_name=$(basename "$PWD")
