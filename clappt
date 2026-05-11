@@ -140,8 +140,9 @@ apptainer_flags=(
     "--bind" "$HOME/.local/bin/uv:/home/user/.local/bin/uv:ro"
     "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv:ro"
     # bind mounts for pixi
-    "--bind" "$HOME/.pixi:/home/user/.pixi"
     "--bind" "$HOME/.pixi/bin/pixi:/usr/bin/pixi"
+    # persistent memory for all agents
+    "--bind" "$HOME/agent-memory:/home/user/agent-memory"
     # some other bits
     "--env" "EDITOR=vim"
 )
@@ -204,6 +205,12 @@ if [[ -d "$HOME/.cargo" ]]; then
         "--bind" "$HOME/.rustup:/home/user/.rustup:ro"
     )
     extra_paths+=("/home/user/.cargo/bin")
+fi
+
+# add ~/.bun if exists (we might have installed `codex` or `pi` with `bun`)
+if [[ -d $HOME/.bun ]]; then
+    apptainer_flags+=("--bind" "$HOME/.bun:/home/user/.bun")
+    extra_paths+=("/home/user/.bun/bin")
 fi
 
 # join the extra paths (use sub-shell to scope IFS change)
@@ -291,6 +298,18 @@ apptainer_flags+=(
     "--bind" "$tmp_passwd:/etc/passwd:ro"
     "--bind" "$tmp_group:/etc/group:ro"
 )
+
+# add more pixi stuff if the project uses it
+if [[ -f "$PWD/pixi.toml" ]]; then
+    # create `.pixi` shim dir (to be used instead of `.pixi` inside the container;
+    # this avoids issues with absolute paths etc. as pixi will essentially create the
+    # env twice; once in `.pixi-clappt` and once in `.pixi`)
+    if [[ ! -d ".pixi-clappt" ]]; then
+        >&2 echo "INFO: Creating container pixi directory at '$PWD/.pixi-clappt'"
+        mkdir -p ".pixi-clappt"
+    fi
+    apptainer_flags+=("--bind" "$PWD/.pixi-clappt:$masked_work_dir/.pixi")
+fi
 
 # check if we're in a linked git worktree (i.e. not the main worktree). If that's the
 # case, find the main worktree and bind it into the container as well. We then overwrite
