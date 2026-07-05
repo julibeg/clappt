@@ -138,7 +138,8 @@ apptainer_flags=(
     "--bind" "$HOME/.pi:/home/user/.pi"
     # bind mounts for uv
     "--bind" "$HOME/.local/bin/uv:/home/user/.local/bin/uv:ro"
-    "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv:ro"
+    "--bind" "$HOME/.local/bin/uvx:/home/user/.local/bin/uvx:ro"
+    "--bind" "$HOME/.local/share/uv:/home/user/.local/share/uv"
     # bind mounts for pixi
     "--bind" "$HOME/.pixi/bin/pixi:/usr/bin/pixi"
     # persistent memory for all agents
@@ -213,6 +214,25 @@ if [[ -d $HOME/.bun ]]; then
     extra_paths+=("/home/user/.bun/bin")
 fi
 
+# add ~/.nvm if exists (and add to path)
+if [[ -d $HOME/.nvm ]]; then
+    apptainer_flags+=("--bind" "$HOME/.nvm:/home/user/.nvm")
+    extra_paths+=("/home/user/.nvm/versions/node/v24.15.0/bin")
+fi
+
+# bind `pnpm` bin dir if exists and add to PATH
+if [[ -d $HOME/.local/share/pnpm ]]; then
+    apptainer_flags+=("--bind" "$HOME/.local/share/pnpm:/home/user/.local/share/pnpm")
+    extra_paths+=("/home/user/.local/share/pnpm/bin")
+fi
+
+# bind playwright cache if exists
+if [[ -d "$HOME/.cache/ms-playwright" ]]; then
+    apptainer_flags+=(
+        "--bind" "$HOME/.cache/ms-playwright:/home/user/.cache/ms-playwright:ro"
+    )
+fi
+
 # join the extra paths (use sub-shell to scope IFS change)
 extra_paths_joined=$(IFS=":"; echo "${extra_paths[*]}")
 apptainer_flags+=("--env" EXTRA_PATHS="$extra_paths_joined")
@@ -277,7 +297,7 @@ while IFS= read -r link; do
     if ! in_array apptainer_flags "${target}:${bind_target}"; then
         apptainer_flags+=("--bind" "${target}:${bind_target}")
     fi
-done < <(find "$HOME/.claude" "$HOME/.codex" "$HOME/.pi" -maxdepth 1 -type l)
+done < <(find "$HOME/.claude" "$HOME/.codex" "$HOME/.pi/agent" -maxdepth 1 -type l)
 
 # mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
 work_dir_name=$(basename "$PWD")
