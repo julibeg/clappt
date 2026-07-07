@@ -7,6 +7,12 @@ IMAGE="oras://docker.io/julibeg/clappt:latest"
 extra_args=()
 test_hooks=false
 writeable_mm_env=""
+stage_dirs_arg=""
+stage_dirs_set=false
+
+usage() {
+    >&2 echo "Usage: $(basename "$0") [--test-hooks] [--stage-dirs DIRS] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -16,15 +22,24 @@ while [[ $# -gt 0 ]]; do
         ;;
     --writeable-mm-env)
         if [[ $# -lt 2 ]]; then
-            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
+            usage
             exit 1
         fi
         writeable_mm_env="$2"
         shift 2
         ;;
+    --stage-dirs)
+        if [[ $# -lt 2 ]]; then
+            usage
+            exit 1
+        fi
+        stage_dirs_arg="$2"
+        stage_dirs_set=true
+        shift 2
+        ;;
     --image)
         if [[ $# -lt 2 ]]; then
-            >&2 echo "Usage: $(basename "$0") [--test-hooks] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
+            usage
             exit 1
         fi
         IMAGE="$(realpath "$2")"
@@ -255,13 +270,13 @@ fi
 in_array() {
   local -n arr="$1"
   local value="$2"
-  
+
   for item in "${arr[@]}"; do
     if [[ "$item" == "$value" ]]; then
       return 0
     fi
   done
-  
+
   return 1
 }
 
@@ -299,11 +314,6 @@ while IFS= read -r link; do
     fi
 done < <(find "$HOME/.claude" "$HOME/.codex" "$HOME/.pi/agent" -maxdepth 1 -type l)
 
-# mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
-work_dir_name=$(basename "$PWD")
-work_dir_hash=$(printf "%s" "$PWD" | sha256sum | cut -c1-12)
-masked_work_dir="/work/${work_dir_hash}/${work_dir_name}"
-
 # create patched passwd and group files to overlay in the container's /etc
 tmp_passwd="${tmp_dir}/passwd"
 tmp_group="${tmp_dir}/group"
@@ -311,74 +321,124 @@ tmp_group="${tmp_dir}/group"
 echo "user:x:$(id -u):$(id -g):User:/home/user:/bin/bash" >"$tmp_passwd"
 echo "user:x:$(id -g):" >"$tmp_group"
 
-# add to the flags
+stage_dirs=()
+if [[ "$stage_dirs_set" == true ]]; then
+    if [[ -z "$stage_dirs_arg" || "$stage_dirs_arg" == *, || \
+        "$stage_dirs_arg" == ,* || "$stage_dirs_arg" == *,,* ]]; then
+        >&2 echo "ERROR: empty entry in --stage-dirs"
+        exit 1
+    fi
+    IFS=',' read -r -a raw_stage_dirs <<<"$stage_dirs_arg"
+else
+    raw_stage_dirs=("$PWD")
+fi
+
+for raw_stage_dir in "${raw_stage_dirs[@]}"; do
+    if [[ "$stage_dirs_set" == true && "$raw_stage_dir" != /* ]]; then
+        >&2 echo "ERROR: --stage-dirs entries must be absolute paths: '$raw_stage_dir'"
+        exit 1
+    fi
+    if [[ ! -d "$raw_stage_dir" ]]; then
+        >&2 echo -n "ERROR: --stage-dirs entry is not a directory: '$raw_stage_dir'; "
+        >&2 echo "only absolute paths are supported"
+        exit 1
+    fi
+    stage_dirs+=("$raw_stage_dir")
+done
+
+container_pwd="/work"
+
+stage_dir() {
+    local host_dir="$1"
+    local work_dir_name=""
+    local work_dir_hash=""
+    local masked_work_dir=""
+
+    # mask path by hashing it and binding to `/work/<hash>/<project-dir-name>`
+    work_dir_name=$(basename "$host_dir")
+    work_dir_hash=$(printf "%s" "$host_dir" | sha256sum | cut -c1-12)
+    masked_work_dir="/work/${work_dir_hash}/${work_dir_name}"
+    if [[ "$stage_dirs_set" == false ]]; then
+        container_pwd="$masked_work_dir"
+    fi
+
+    apptainer_flags+=("--bind" "$host_dir:$masked_work_dir")
+
+    # add more pixi stuff if the project uses it
+    if [[ -f "$host_dir/pixi.toml" ]]; then
+        # create `.pixi` shim dir (to be used instead of `.pixi` inside the container;
+        # this avoids issues with absolute paths etc. as pixi will essentially create
+        # the env twice; once in `.pixi-clappt` and once in `.pixi`)
+        if [[ ! -d "$host_dir/.pixi-clappt" ]]; then
+            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-clappt'"
+            mkdir -p "$host_dir/.pixi-clappt"
+        fi
+        apptainer_flags+=("--bind" "$host_dir/.pixi-clappt:$masked_work_dir/.pixi")
+    fi
+
+    # check if we're in a linked git worktree (i.e. not the main worktree). If that's
+    # the case, find the main worktree and bind it into the container as well. We then
+    # overwrite the .git file of the current dir (which is just a text file containing
+    # "gitdir: /path/to/main/worktree/.git/worktrees/<worktree_name>") with another
+    # bind to contain the modified path (the one that we bind to in the container)
+    if [ -f "$host_dir/.git" ]; then
+        # .git is a file and not a dir --> might be a linked (i.e. secondary) worktree
+        gitdir_line=$(head -n 1 "$host_dir/.git" || true)
+        if [[ "$gitdir_line" == gitdir:* ]]; then
+            # linked worktree confirmed --> get the path to the main worktree's .git dir
+            gitdir_path=${gitdir_line#gitdir: }
+
+            # by default the gitdir path is absolute, but it also works with relative
+            # paths and we should handle both
+            if [[ "$gitdir_path" == /* ]]; then
+                abs_gitdir_path="$gitdir_path"
+            else
+                abs_gitdir_path=$(realpath "$host_dir/$gitdir_path")
+            fi
+
+            # the gitdir path points to /path/to/main/worktree/.git/worktrees/<name>;
+            # assert the path has indeed the expected format and get the path to the
+            # main worktree's .git dir
+            worktree_name=$(basename "$abs_gitdir_path")
+            if [[ "$abs_gitdir_path" != */.git/worktrees/$worktree_name ]]; then
+                >&2 echo "ERROR: Unexpected gitdir path format: $gitdir_path"
+                exit 1
+            fi
+            main_git_dir=${abs_gitdir_path%%/.git/*}/.git
+
+            # bind the main .git dir to a fixed, known location inside the container and
+            # rewrite the worktree name portion of the path accordingly
+            if [[ "$stage_dirs_set" == true ]]; then
+                container_git_dir="/main-worktrees/${work_dir_hash}/.git"
+            else
+                container_git_dir="/main-worktree/.git"
+            fi
+            container_gitdir_path="${container_git_dir}/worktrees/${worktree_name}"
+
+            # create a patched .git file pointing to the container-internal path
+            tmp_gitfile="${tmp_dir}/dotgit-${work_dir_hash}"
+            echo "gitdir: ${container_gitdir_path}" >"$tmp_gitfile"
+
+            # bind the main worktree's .git dir to our fixed location, and overlay the
+            # linked worktree's .git file with our patched version
+            apptainer_flags+=(
+                # we don't make the main .git dir read-only so that we can still modify
+                # the stash etc in the container
+                "--bind" "${main_git_dir}:${container_git_dir}"
+                "--bind" "${tmp_gitfile}:${masked_work_dir}/.git:ro"
+            )
+        fi
+    fi
+}
+
+for stage_dir in "${stage_dirs[@]}"; do
+    stage_dir "$stage_dir"
+done
+
 apptainer_flags+=(
-    "--pwd" "$masked_work_dir"
-    "--bind" "$PWD:$masked_work_dir"
+    "--pwd" "$container_pwd"
     "--bind" "$tmp_passwd:/etc/passwd:ro"
     "--bind" "$tmp_group:/etc/group:ro"
 )
-
-# add more pixi stuff if the project uses it
-if [[ -f "$PWD/pixi.toml" ]]; then
-    # create `.pixi` shim dir (to be used instead of `.pixi` inside the container;
-    # this avoids issues with absolute paths etc. as pixi will essentially create the
-    # env twice; once in `.pixi-clappt` and once in `.pixi`)
-    if [[ ! -d ".pixi-clappt" ]]; then
-        >&2 echo "INFO: Creating container pixi directory at '$PWD/.pixi-clappt'"
-        mkdir -p ".pixi-clappt"
-    fi
-    apptainer_flags+=("--bind" "$PWD/.pixi-clappt:$masked_work_dir/.pixi")
-fi
-
-# check if we're in a linked git worktree (i.e. not the main worktree). If that's the
-# case, find the main worktree and bind it into the container as well. We then overwrite
-# the .git file of the current dir (which is just a text file containing "gitdir:
-# /path/to/main/worktree/.git/worktrees/<worktree_name>") with another bind to contain
-# the modified path (the one that we bind to in the container)
-if [ -f "$PWD/.git" ]; then
-    # .git is a file and not a dir --> might be a linked (i.e. secondary) worktree
-    gitdir_line=$(head -n 1 "$PWD/.git" || true)
-    if [[ "$gitdir_line" == gitdir:* ]]; then
-        # linked worktree confirmed --> get the path to the main worktree's .git dir
-        gitdir_path=${gitdir_line#gitdir: }
-
-        # by default the gitdir path is absolute, but it also works with relavite paths
-        # and we should handle both
-        if [[ "$gitdir_path" == /* ]]; then
-            abs_gitdir_path="$gitdir_path"
-        else
-            abs_gitdir_path=$(realpath "$PWD/$gitdir_path")
-        fi
-
-        # the gitdir path points to /path/to/main/worktree/.git/worktrees/<name>; let's
-        # assert the path has indeed the expected format and get the path to the main
-        # worktrere's .git dir
-        worktree_name=$(basename "$abs_gitdir_path")
-        if [[ "$gitdir_path" != */.git/worktrees/$worktree_name ]]; then
-            >&2 echo "ERROR: Unexpected gitdir path format: $gitdir_path"
-            exit 1
-        fi
-        main_git_dir=${abs_gitdir_path%%/.git/*}/.git
-
-        # we bind the main .git dir to a fixed, known location inside the container and
-        # rewrite the worktree name portion of the path accordingly
-        container_git_dir="/main-worktree/.git"
-        container_gitdir_path="${container_git_dir}/worktrees/${worktree_name}"
-
-        # create a patched .git file pointing to the container-internal path
-        tmp_gitfile="${tmp_dir}/dotgit"
-        echo "gitdir: ${container_gitdir_path}" >"$tmp_gitfile"
-
-        # bind the main worktree's .git dir to our fixed location, and overlay the
-        # linked worktree's .git file with our patched version
-        apptainer_flags+=(
-            # we don't make the main .git dir read-only so that we can still modify the
-            # stash etc in the container
-            "--bind" "${main_git_dir}:${container_git_dir}"
-            "--bind" "${tmp_gitfile}:${masked_work_dir}/.git:ro"
-        )
-    fi
-fi
 
 apptainer run "${apptainer_flags[@]}" "$IMAGE" "${extra_args[@]}"

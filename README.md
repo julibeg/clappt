@@ -15,6 +15,7 @@ This Apptainer image & wrapper script (alongside the Claude Code hooks) just try
 
 The wrapper masks the host user name and paths inside the container.
 It overlays `/etc/passwd` and `/etc/group` to replace the host username with `user` and binds the current working directory to a masked path under `/work`.
+Use `--stage-dirs /path/one,/path/two` to bind absolute paths instead; each gets its own `/work/<hash>/<name>` path and the container starts in `/work`.
 Overlaying `/etc/passwd` and `/etc/group` is hacky, but provides obfuscation without breaking things in most cases.
 
 If the host has `micromamba` installed (`MAMBA_ROOT_PREFIX` is set, the directory it points to exists, and the `micromamba` command is available), the wrapper sets up the container so that:
