@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# debug mode opens a shell with the same mounts instead of starting T3 Code
 debug=false
 if [[ "${1:-}" == --debug ]]; then
   debug=true
@@ -15,6 +16,8 @@ fi
 
 mkdir -p ~/.t3-container-state
 
+# stage projects by basename under /work; duplicate basenames would collide (checked by
+# associative array `project_names`)
 project_mounts=()
 declare -A project_names=()
 for raw_project_dir in "$@"; do
@@ -35,6 +38,7 @@ for raw_project_dir in "$@"; do
   project_mounts+=(-v "$project_dir:$container_dir:Z")
 done
 
+# start inside the sole project, or at `/work` when several projects are staged
 if [[ $# -gt 1 ]]; then
   container_project_dir="/work"
 else
@@ -54,6 +58,7 @@ container_command=(bash -lc '
     export PATH="/root/.local/share/pnpm/bin:$PATH"
     t3 --no-browser --host 0.0.0.0 --port 3773
 ')
+# never pull: only the image produced by `build.sh` may run
 podman_args=(run --rm --pull=never -it)
 if [[ "$debug" == true ]]; then
   container_command=(bash)
@@ -65,6 +70,7 @@ else
   )
 fi
 
+# tool installations and agent definitions are read-only; state and memory persist
 podman "${podman_args[@]}" \
 "${project_mounts[@]}" \
 -v "$HOME/.t3-container-state:/data:Z" \
