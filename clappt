@@ -66,24 +66,6 @@ trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
 tmp_home="${tmp_dir}/home"
 mkdir -p "$tmp_home"
 
-path_to_scrub=""
-
-warn_if_text_scrub() {
-    local scrub_path="$1"
-    local encoding=""
-
-    encoding=$(file -b --mime-encoding "$scrub_path" || true)
-    if [[ -z "$encoding" ]]; then
-        >&2 echo "ERROR: failed to determine mime encoding for '$scrub_path'"
-        exit 1
-    fi
-
-    if [[ "$encoding" != "binary" ]]; then
-        >&2 echo -n "WARNING: 'scrub' appears to be a plain text script ("
-        >&2 echo "${encoding}); it could be read to glean secrets it scrubs"
-    fi
-}
-
 if [[ "$test_hooks" == true ]]; then
     # hook-testing mode: make sure we got `~/.claude/hooks`, that it's a symlink, and
     # that there is a `test` subdir inside the symlink target
@@ -94,15 +76,6 @@ if [[ "$test_hooks" == true ]]; then
         >&2 echo "and have a directory 'test' inside its target"
         exit 1
     fi
-    # use the test `scrub` for testing the claude hooks setup (and make sure it's
-    # executable)
-    path_to_scrub="$(realpath "$hook_test_dir/scrub")"
-    if [[ ! -x "$path_to_scrub" ]]; then
-        >&2 echo -n "ERROR: found scrub for hooks testing at '$path_to_scrub', "
-        >&2 echo "but it's not executable"
-        exit 1
-    fi
-    warn_if_text_scrub "$path_to_scrub"
     # copy directory with test files to temp location and cd into it (so that the
     # container can work in there)
     test_workdir="${tmp_dir}/hooks-tests"
@@ -115,20 +88,6 @@ if [[ "$test_hooks" == true ]]; then
             "bash" "-c"
             "cat prompt.md | claude -p --permission-mode acceptEdits --model haiku"
         )
-    fi
-else
-    # check if we got an executable `scrub` that we can bind (used by hooks for
-    # scrubbing secrets from files / tool calls)
-    if command -v scrub &>/dev/null; then
-        path_to_scrub=$(realpath "$(which scrub)")
-        if [[ ! -x "$path_to_scrub" ]]; then
-            >&2 echo "ERROR: found 'scrub', but it's not executable: '$path_to_scrub'"
-            exit 1
-        fi
-        warn_if_text_scrub "$path_to_scrub"
-    else
-        >&2 echo -n "WARNING: 'scrub' not found in PATH; hooks that rely on it will "
-        >&2 echo "fail; is this intended?"
     fi
 fi
 
@@ -252,16 +211,11 @@ fi
 extra_paths_joined=$(IFS=":"; echo "${extra_paths[*]}")
 apptainer_flags+=("--env" EXTRA_PATHS="$extra_paths_joined")
 
-# add scrubber if we have it
-if [[ -n "$path_to_scrub" ]]; then
-    apptainer_flags+=("--bind" "$path_to_scrub:/usr/bin/scrub:ro")
-fi
-
 # add fish if present
 if command -v fish &>/dev/null; then
     path_to_fish=$(realpath "$(which fish)")
     if [[ ! -x "$path_to_fish" ]]; then
-        >&2 echo "ERROR: found 'fish', but it's not executable: '$path_to_scrub'"
+        >&2 echo "ERROR: found 'fish', but it's not executable: '$path_to_fish'"
     fi
     apptainer_flags+=("--bind" "$path_to_fish:/usr/bin/fish:ro")
 fi

@@ -11,16 +11,6 @@ EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 
 case "$EVENT" in
-  PreToolUse)
-    case "$TOOL" in
-      Bash) HOOK="$HOOKS_DIR/pre-bash-tool" ;;
-      Read) HOOK="$HOOKS_DIR/pre-read-tool" ;;
-      *)
-        >&2 echo "Unexpected tool for $EVENT: $TOOL"
-        exit 2
-        ;;
-    esac
-    ;;
   PostToolUse)
     case "$TOOL" in
       Edit|Write) HOOK="$HOOKS_DIR/post-edit-write-tool" ;;

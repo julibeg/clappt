@@ -1,15 +1,11 @@
 # clappt
 
 Minimal Apptainer setup for running Claude Code with masked host username and paths.
-Provides hooks for scrubbing secrets (email addresses, API keys, etc.) from tool call outputs and running Ruff on Python files, along with testing support for the hooks.
-You need to provide a scrubber executable (`scrub`) on `PATH` when running `clappt` for the scrubbing hooks to work.
-Ideally this executable is a binary so that the agent can't read the source and glean the secrets.
-A simple way to create a binary from a shell script is to use [shc](https://github.com/neurobin/shc).
-`shc` is available inside the container.
+Provides a hook that runs Ruff on edited Python files, along with testing support.
 
 **IMPORTANT**: This does not provide actual security (especially against prompt injection attacks or similar).
 If a coding agent has tool-calling permissions and really wants to gain sensitive information, it can.
-This Apptainer image & wrapper script (alongside the Claude Code hooks) just try to marginally improve privacy by filtering what is sent to the LLM.
+This Apptainer image & wrapper script just try to marginally improve privacy by masking host paths and usernames.
 
 ## The wrapper and container
 
@@ -28,7 +24,7 @@ If the host has Rust installed (i.e. `~/.cargo` and `~/.rustup` exist), it is al
 
 ## Claude Code hooks
 
-`clappt` comes with a small set of hooks for scrubbing tool call output before it reaches the agent as well as running ruff on edited Python files.
+`clappt` comes with a hook that runs Ruff on edited Python files.
 
 ### Hooks setup
 
@@ -46,31 +42,4 @@ Run the built-in test mode:
 ./clappt --test-hooks
 ```
 
-Expected behavior:
-- Reading `test-1.txt` and `test-2.txt` via the `Read` tool should return the same content (scrubbed output).
-- The same applies for reading the files with `cat` (`Bash` tool).
-- Editing `test.py` should trigger a Ruff warning about the unused variable.
-
-Example output of Claude Code for the hooks test:
-
-```md
-Perfect! Here are the results of the hooks setup tests:
-
-#### Results
-
-1. **Read tool vs Read tool on .txt files:**
-   - `test-1.txt` via Read: Shows full content with line numbers ("hi 1", "hi 2", "hi 3", blank line)
-   - `test-2.txt` via Read: **Sanitized by hook** - shows only the content without line numbers ("hi 1", "hi 2", "hi 3")
-   - ✅ Different content! The hook successfully sanitized one file.
-
-2. **Cat command on .txt files:**
-   - Both files show identical content: "hi 1", "hi 2", "hi 3"
-   - ✅ Same content when using `cat` (bypasses the Read tool hook)
-
-3. **Edit tool on Python file:**
-   - ✅ **Yes, you get a linter error!**
-   - **Error: `F841 Local variable 'unused_var' is assigned to but never used`**
-   - The hook detected that the variable `unused_var` on line 2 is never used and reported it as a linting issue.
-
-The hooks are working correctly! The Read hook sanitizes sensitive content in certain files, and the Edit hook runs a linter (ruff) to catch code quality issues.
-```
+Expected behavior: editing `test.py` triggers a Ruff warning about the unused variable.
