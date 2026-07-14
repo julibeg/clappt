@@ -1,0 +1,84 @@
+#!/bin/bash
+
+set -euo pipefail
+
+debug=false
+if [[ "${1:-}" == --debug ]]; then
+  debug=true
+  shift
+fi
+
+if [[ $# -eq 0 ]]; then
+  echo "Usage: $0 [--debug] PROJECT_DIR [PROJECT_DIR ...]" >&2
+  exit 1
+fi
+
+mkdir -p ~/.t3-container-state
+
+project_mounts=()
+declare -A project_names=()
+for raw_project_dir in "$@"; do
+  project_dir=$(realpath "$raw_project_dir")
+  if [[ ! -d "$project_dir" ]]; then
+    echo "Error: $project_dir is not a directory" >&2
+    exit 1
+  fi
+
+  project_name=$(basename "$project_dir")
+  if [[ -n "${project_names[$project_name]:-}" ]]; then
+    echo "Error: project directory name clashes: $project_name" >&2
+    exit 1
+  fi
+  project_names[$project_name]="$project_dir"
+
+  container_dir="/work/$project_name"
+  project_mounts+=(-v "$project_dir:$container_dir:Z")
+done
+
+if [[ $# -gt 1 ]]; then
+  container_project_dir="/work"
+else
+  container_project_dir="$container_dir"
+fi
+
+pnpm_home="$HOME/.local/share/pnpm"
+agents_dir="$HOME/git/agents-stuff"
+
+if [[ ! -d "$agents_dir" ]]; then
+  echo "Error: Codex symlink target not found: $agents_dir" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC2016
+container_command=(bash -lc '
+    export PATH="/root/.local/share/pnpm/bin:$PATH"
+    t3 --no-browser --host 0.0.0.0 --port 3773
+')
+podman_args=(run --rm --pull=never -it)
+if [[ "$debug" == true ]]; then
+  container_command=(bash)
+else
+  podman_args+=(
+    --replace
+    --name t3code
+    -p 127.0.0.1:3773:3773
+  )
+fi
+
+podman "${podman_args[@]}" \
+"${project_mounts[@]}" \
+-v "$HOME/.t3-container-state:/data:Z" \
+-v "$pnpm_home:/root/.local/share/pnpm:ro,z" \
+-v "$HOME/.codex:/home/user/.codex:Z" \
+-v "$agents_dir:/home/user/git/agents-stuff:ro,z" \
+-v "$HOME/agent-memory:/home/user/agent-memory:z" \
+-w "$container_project_dir" \
+-e PATH=/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+-e HOME=/home/user \
+-e T3CODE_MODE=web \
+-e T3CODE_HOST=0.0.0.0 \
+-e T3CODE_PORT=3773 \
+-e T3CODE_NO_BROWSER=true \
+-e T3CODE_HOME=/data \
+t3code:latest \
+"${container_command[@]}"
