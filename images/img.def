@@ -21,6 +21,7 @@ From: debian:bookworm-slim
     # - poppler-utils (needed by CC to read PDFs natively)
     # - imagemagick (to crop images etc.)
     apt-get update && apt-get install -y --no-install-recommends \
+        procps \
         git \
         bash \
         ca-certificates \
