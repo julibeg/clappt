@@ -1,9 +1,17 @@
-FROM mcr.microsoft.com/playwright:v1.61.1-noble
-
-COPY build-tmp/pixi-build /usr/local/bin/pixi
+ARG PLAYWRIGHT_VERSION
+FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install --global t3@latest playwright@1.61.1 \
+    && apt-get install --yes --no-install-recommends build-essential jq \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG PLAYWRIGHT_VERSION
+RUN npm install --global "playwright@$PLAYWRIGHT_VERSION" \
     && npm cache clean --force
+
+ARG T3_VERSION
+RUN npm install --global "t3@$T3_VERSION" \
+    && npm cache clean --force
+
+COPY build-tmp/pixi-build /usr/local/bin/pixi
+COPY container-entrypoint /usr/local/bin/t3pod-entrypoint

@@ -7,7 +7,7 @@ output_dir="$script_dir/playwright-test-output"
 mkdir -p "$output_dir"
 
 podman run --rm --pull=never \
-  -v "$output_dir:/output:Z" \
+  -v "$output_dir:/output" \
   t3code:latest bash -lc '
     playwright --version
     playwright screenshot --browser chromium \

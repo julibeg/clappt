@@ -35,7 +35,7 @@ for raw_project_dir in "$@"; do
   project_names[$project_name]="$project_dir"
 
   container_dir="/work/$project_name"
-  project_mounts+=(-v "$project_dir:$container_dir:Z")
+  project_mounts+=(-v "$project_dir:$container_dir")
 done
 
 # start inside the sole project, or at `/work` when several projects are staged
@@ -46,12 +46,21 @@ else
 fi
 
 pnpm_home="$HOME/.local/share/pnpm"
+cli_utils_env="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}/envs/cli-utils"
+container_cli_utils_env="/home/user/micromamba/envs/cli-utils"
+claude_bin="$HOME/.local/bin/claude"
+claude_hooks_dir="$HOME/git/clappt/hooks"
+# these approved roots resolve external agent symlinks without exposing arbitrary
+# symlink targets
 agents_dir="$HOME/git/agents-stuff"
 
-if [[ ! -d "$agents_dir" ]]; then
-  echo "Error: Codex symlink target not found: $agents_dir" >&2
-  exit 1
-fi
+for required_path in \
+  "$agents_dir" "$claude_hooks_dir" "$claude_bin" "$cli_utils_env"; do
+  if [[ ! -e "$required_path" ]]; then
+    echo "Error: required host path not found: $required_path" >&2
+    exit 1
+  fi
+done
 
 # shellcheck disable=SC2016
 container_command=(bash -lc '
@@ -73,18 +82,25 @@ fi
 # tool installations and agent definitions are read-only; state and memory persist
 podman "${podman_args[@]}" \
 "${project_mounts[@]}" \
--v "$HOME/.t3-container-state:/data:Z" \
--v "$pnpm_home:/root/.local/share/pnpm:ro,z" \
--v "$HOME/.codex:/home/user/.codex:Z" \
--v "$agents_dir:/home/user/git/agents-stuff:ro,z" \
--v "$HOME/agent-memory:/home/user/agent-memory:z" \
+-v "$HOME/.t3-container-state:/data" \
+-v "$pnpm_home:/root/.local/share/pnpm:ro" \
+-v "$cli_utils_env:$container_cli_utils_env:ro" \
+-v "$HOME/.codex:/home/user/.codex" \
+-v "$HOME/.claude:/home/user/.claude" \
+-v "$HOME/.claude.json:/home/user/.claude.json" \
+-v "$claude_bin:/home/user/.local/bin/claude:ro" \
+-v "$claude_hooks_dir:/home/user/git/clappt/hooks:ro" \
+-v "$agents_dir:/home/user/git/agents-stuff:ro" \
+-v "$HOME/agent-memory:/home/user/agent-memory" \
 -w "$container_project_dir" \
--e PATH=/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+-e "PATH=$container_cli_utils_env/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
 -e HOME=/home/user \
+-e DISABLE_AUTOUPDATER=1 \
 -e T3CODE_MODE=web \
 -e T3CODE_HOST=0.0.0.0 \
 -e T3CODE_PORT=3773 \
 -e T3CODE_NO_BROWSER=true \
 -e T3CODE_HOME=/data \
 t3code:latest \
+/usr/local/bin/t3pod-entrypoint \
 "${container_command[@]}"

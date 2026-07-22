@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -euo pipefail
+
+installed=$(t3 --version 2>/dev/null | tail -n 1)
+installed=${installed##* }
+installed=${installed#v}
+latest=$(npm view t3 version 2>/dev/null || true)
+
+if [[ -n "$installed" && -n "$latest" && "$installed" != "$latest" ]]; then
+  echo "WARNING: T3 Code $installed is installed; $latest is available" >&2
+fi
+
+exec "$@"
