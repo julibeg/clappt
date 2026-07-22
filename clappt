@@ -271,6 +271,7 @@ echo "user:x:$(id -u):$(id -g):User:/home/user:/bin/bash" >"$tmp_passwd"
 echo "user:x:$(id -g):" >"$tmp_group"
 
 stage_dirs=()
+stage_dir_modes=()
 if [[ "$stage_dirs_set" == true ]]; then
     if [[ -z "$stage_dirs_arg" || "$stage_dirs_arg" == *, || \
         "$stage_dirs_arg" == ,* || "$stage_dirs_arg" == *,,* ]]; then
@@ -283,6 +284,11 @@ else
 fi
 
 for raw_stage_dir in "${raw_stage_dirs[@]}"; do
+    stage_dir_mode=""
+    if [[ "$stage_dirs_set" == true && "$raw_stage_dir" == *:ro ]]; then
+        raw_stage_dir=${raw_stage_dir%:ro}
+        stage_dir_mode=":ro"
+    fi
     if [[ "$stage_dirs_set" == true && "$raw_stage_dir" != /* ]]; then
         >&2 echo "ERROR: --stage-dirs entries must be absolute paths: '$raw_stage_dir'"
         exit 1
@@ -293,12 +299,14 @@ for raw_stage_dir in "${raw_stage_dirs[@]}"; do
         exit 1
     fi
     stage_dirs+=("$raw_stage_dir")
+    stage_dir_modes+=("$stage_dir_mode")
 done
 
 container_pwd="/work"
 
 stage_dir() {
     local host_dir="$1"
+    local bind_mode="$2"
     local work_dir_name=""
     local work_dir_hash=""
     local masked_work_dir=""
@@ -311,10 +319,10 @@ stage_dir() {
         container_pwd="$masked_work_dir"
     fi
 
-    apptainer_flags+=("--bind" "$host_dir:$masked_work_dir")
+    apptainer_flags+=("--bind" "$host_dir:$masked_work_dir$bind_mode")
 
-    # add more pixi stuff if the project uses it
-    if [[ -f "$host_dir/pixi.toml" ]]; then
+    # add more pixi stuff if the project uses it and is writeable
+    if [[ -f "$host_dir/pixi.toml" && -z "$bind_mode" ]]; then
         # create `.pixi` shim dir (to be used instead of `.pixi` inside the container;
         # this avoids issues with absolute paths etc. as pixi will essentially create
         # the env twice; once in `.pixi-clappt` and once in `.pixi`)
@@ -371,17 +379,16 @@ stage_dir() {
             # bind the main worktree's .git dir to our fixed location, and overlay the
             # linked worktree's .git file with our patched version
             apptainer_flags+=(
-                # we don't make the main .git dir read-only so that we can still modify
-                # the stash etc in the container
-                "--bind" "${main_git_dir}:${container_git_dir}"
+                # keep the main .git dir writeable unless the staged worktree is read-only
+                "--bind" "${main_git_dir}:${container_git_dir}${bind_mode}"
                 "--bind" "${tmp_gitfile}:${masked_work_dir}/.git:ro"
             )
         fi
     fi
 }
 
-for stage_dir in "${stage_dirs[@]}"; do
-    stage_dir "$stage_dir"
+for i in "${!stage_dirs[@]}"; do
+    stage_dir "${stage_dirs[$i]}" "${stage_dir_modes[$i]}"
 done
 
 apptainer_flags+=(
