@@ -120,6 +120,7 @@ apptainer_flags=(
     "--bind" "$HOME/agent-memory:/home/user/agent-memory"
     # some other bits
     "--env" "EDITOR=vim"
+    "--bind" "$HOME/.config/firecrawl-cli:/home/user/.config/firecrawl-cli"
 )
 
 # we keep track of all paths (inside the container) that we want to add to PATH to make
@@ -186,12 +187,6 @@ fi
 if [[ -d $HOME/.bun ]]; then
     apptainer_flags+=("--bind" "$HOME/.bun:/home/user/.bun")
     extra_paths+=("/home/user/.bun/bin")
-fi
-
-# add ~/.nvm if exists (and add to path)
-if [[ -d $HOME/.nvm ]]; then
-    apptainer_flags+=("--bind" "$HOME/.nvm:/home/user/.nvm")
-    extra_paths+=("/home/user/.nvm/versions/node/v24.15.0/bin")
 fi
 
 # bind `pnpm` bin dir if exists and add to PATH
