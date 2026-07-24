@@ -193,6 +193,9 @@ fi
 if [[ -d $HOME/.local/share/pnpm ]]; then
     apptainer_flags+=("--bind" "$HOME/.local/share/pnpm:/home/user/.local/share/pnpm")
     extra_paths+=("/home/user/.local/share/pnpm/bin")
+    if [[ -d $HOME/.pnpm-store ]]; then
+        apptainer_flags+=("--bind" "$HOME/.pnpm-store:/home/user/.pnpm-store")
+    fi
 fi
 
 # bind playwright cache if exists
