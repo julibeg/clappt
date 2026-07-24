@@ -1,0 +1,59 @@
+ARG PLAYWRIGHT_VERSION=1.61.1
+FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
+
+ARG PLAYWRIGHT_VERSION
+ARG PNPM_VERSION=11.17.0
+ARG MINIMUM_RELEASE_AGE=2880
+ARG CLAUDE_VERSION=2.1.218
+ARG CODEX_VERSION=0.145.0
+ARG PI_VERSION=0.82.0
+ARG PIXI_VERSION=0.66.0
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        build-essential ca-certificates curl fd-find git imagemagick jq less \
+        poppler-utils procps ripgrep vim \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PNPM_HOME=/usr/local/share/pnpm \
+    PATH=/usr/local/share/pnpm:$PATH
+
+# npm only bootstraps pnpm; third-party CLIs are installed by pnpm without
+# lifecycle scripts.
+RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
+    && npm cache clean --force
+
+RUN pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+    add --global --ignore-scripts \
+        "@anthropic-ai/claude-code@$CLAUDE_VERSION" \
+        "@earendil-works/pi-coding-agent@$PI_VERSION" \
+        "@openai/codex@$CODEX_VERSION" \
+        "playwright@$PLAYWRIGHT_VERSION"
+
+RUN curl -fsSL https://pixi.sh/install.sh \
+    | env PIXI_VERSION="v$PIXI_VERSION" PIXI_BIN_DIR=/usr/local/bin \
+        PIXI_NO_PATH_UPDATE=1 bash
+
+# The Playwright image already contains an unprivileged `pwuser` and browsers.
+RUN usermod --login user --home /home/user --move-home pwuser \
+    && groupmod --new-name user pwuser \
+    && echo 'export PATH="/home/user/.cargo/bin:$PATH"' \
+        >/etc/profile.d/pipod-path.sh \
+    && echo "minimum-release-age=$MINIMUM_RELEASE_AGE" >/home/user/.npmrc \
+    && chown user:user /home/user/.npmrc
+
+ENV HOME=/home/user \
+    USER=user \
+    LOGNAME=user \
+    SHELL=/bin/bash \
+    PATH=/home/user/.cargo/bin:/home/user/.local/bin:/usr/local/share/pnpm:/usr/local/bin:/usr/bin:/bin \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+USER user
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal
+
+COPY --chown=user:user container-entrypoint /usr/local/bin/container-entrypoint
+ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
+CMD ["bash"]

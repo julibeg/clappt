@@ -1,0 +1,204 @@
+#!/bin/bash
+
+set -euo pipefail
+
+IMAGE="localhost/pipod:latest"
+run_args=()
+stage_dirs_arg=""
+stage_dirs_set=false
+
+usage() {
+    >&2 echo "Usage: $(basename "$0") [--stage-dirs DIRS] [--image IMAGE] [-- COMMAND ...]"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --stage-dirs)
+        [[ $# -ge 2 ]] || { usage; exit 1; }
+        stage_dirs_arg="$2"
+        stage_dirs_set=true
+        shift 2
+        ;;
+    --image)
+        [[ $# -ge 2 ]] || { usage; exit 1; }
+        IMAGE="$2"
+        shift 2
+        ;;
+    --)
+        shift
+        run_args+=("$@")
+        break
+        ;;
+    *)
+        run_args+=("$1")
+        shift
+        ;;
+    esac
+done
+
+command -v podman >/dev/null || {
+    >&2 echo "ERROR: podman not found"
+    exit 1
+}
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
+
+podman_args=(
+    run --rm --interactive --pull=missing
+    "--userns=keep-id:uid=1000,gid=1000" --user=user
+    --security-opt label=disable
+    --env EDITOR=vim
+    --env DISABLE_AUTOUPDATER=1
+)
+[[ -t 1 ]] && podman_args+=(--tty)
+
+mounts=()
+mount_if_present() {
+    local source="$1"
+    local destination="$2"
+    local mode="${3:-}"
+    [[ -e "$source" || -L "$source" ]] || return 0
+    mounts+=(--volume "$source:$destination$mode")
+}
+
+# Agent configuration and state. Agent executables are installed in the image.
+mount_if_present "$HOME/.claude" /home/user/.claude
+mount_if_present "$HOME/.claude.json" /home/user/.claude.json
+mount_if_present "$HOME/.local/share/claude" /home/user/.local/share/claude
+mount_if_present "$HOME/.local/state/claude" /home/user/.local/state/claude
+mount_if_present "$HOME/.codex" /home/user/.codex
+mount_if_present "$HOME/.pi" /home/user/.pi
+mount_if_present "$HOME/agent-memory" /home/user/agent-memory
+mount_if_present "$HOME/.config" /home/user/.config :ro
+mount_if_present "$HOME/.cache" /home/user/.cache
+mount_if_present "$HOME/.gitconfig" /home/user/.gitconfig :ro
+
+in_array() {
+    local -n array="$1"
+    local value="$2"
+    local item
+    for item in "${array[@]}"; do
+        [[ "$item" == "$value" ]] && return 0
+    done
+    return 1
+}
+
+# Preserve top-level relative links in each agent directory without exposing the
+# host target path. The mount destination is derived from the link as seen inside.
+agent_roots=("$HOME/.claude" "$HOME/.codex" "$HOME/.pi/agent")
+for root in "${agent_roots[@]}"; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r link; do
+        target=$(readlink -f "$link") || target=""
+        if [[ -z "$target" || ! -e "$target" ]]; then
+            >&2 echo "ERROR: dangling or broken symlink '$link'"
+            exit 1
+        fi
+
+        target_raw=$(readlink "$link")
+        if [[ "$target_raw" == /* ]]; then
+            >&2 echo "WARNING: absolute symlink '$link' exposes '$target' in the container"
+            bind_target="$target"
+        else
+            container_link="/home/user${link#"$HOME"}"
+            bind_target=$(realpath -m "$(dirname "$container_link")/$target_raw")
+        fi
+
+        mount="$target:$bind_target"
+        if ! in_array mounts "$mount"; then
+            mounts+=(--volume "$mount")
+        fi
+    done < <(find "$root" -maxdepth 1 -type l)
+done
+
+if [[ "$stage_dirs_set" == true ]]; then
+    if [[ -z "$stage_dirs_arg" || "$stage_dirs_arg" == *, || \
+        "$stage_dirs_arg" == ,* || "$stage_dirs_arg" == *,,* ]]; then
+        >&2 echo "ERROR: empty entry in --stage-dirs"
+        exit 1
+    fi
+    IFS=',' read -r -a raw_stage_dirs <<<"$stage_dirs_arg"
+else
+    raw_stage_dirs=("$PWD")
+fi
+
+stage_dirs=()
+stage_dir_modes=()
+for raw_stage_dir in "${raw_stage_dirs[@]}"; do
+    stage_dir_mode=""
+    if [[ "$stage_dirs_set" == true && "$raw_stage_dir" == *:ro ]]; then
+        raw_stage_dir=${raw_stage_dir%:ro}
+        stage_dir_mode=":ro"
+    fi
+    if [[ "$stage_dirs_set" == true && "$raw_stage_dir" != /* ]]; then
+        >&2 echo "ERROR: --stage-dirs entries must be absolute paths: '$raw_stage_dir'"
+        exit 1
+    fi
+    if [[ ! -d "$raw_stage_dir" ]]; then
+        >&2 echo "ERROR: --stage-dirs entry is not a directory: '$raw_stage_dir'"
+        exit 1
+    fi
+    stage_dirs+=("$raw_stage_dir")
+    stage_dir_modes+=("$stage_dir_mode")
+done
+
+container_pwd=/work
+stage_dir() {
+    local host_dir="$1"
+    local bind_mode="$2"
+    local work_dir_name work_dir_hash masked_work_dir
+
+    work_dir_name=$(basename "$host_dir")
+    work_dir_hash=$(printf %s "$host_dir" | sha256sum | cut -c1-12)
+    masked_work_dir="/work/$work_dir_hash/$work_dir_name"
+    [[ "$stage_dirs_set" == true ]] || container_pwd="$masked_work_dir"
+    mounts+=(--volume "$host_dir:$masked_work_dir$bind_mode")
+
+    if [[ -f "$host_dir/pixi.toml" && -z "$bind_mode" ]]; then
+        if [[ ! -d "$host_dir/.pixi-pipod" ]]; then
+            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-pipod'"
+            mkdir -p "$host_dir/.pixi-pipod"
+        fi
+        mounts+=(--volume "$host_dir/.pixi-pipod:$masked_work_dir/.pixi")
+    fi
+
+    if [[ -f "$host_dir/.git" ]]; then
+        gitdir_line=$(head -n 1 "$host_dir/.git" || true)
+        if [[ "$gitdir_line" == gitdir:* ]]; then
+            gitdir_path=${gitdir_line#gitdir: }
+            if [[ "$gitdir_path" == /* ]]; then
+                abs_gitdir_path="$gitdir_path"
+            else
+                abs_gitdir_path=$(realpath "$host_dir/$gitdir_path")
+            fi
+
+            worktree_name=$(basename "$abs_gitdir_path")
+            if [[ "$abs_gitdir_path" != */.git/worktrees/"$worktree_name" ]]; then
+                >&2 echo "ERROR: unexpected gitdir path format: $gitdir_path"
+                exit 1
+            fi
+            main_git_dir=${abs_gitdir_path%%/.git/*}/.git
+            if [[ "$stage_dirs_set" == true ]]; then
+                container_git_dir="/main-worktrees/$work_dir_hash/.git"
+            else
+                container_git_dir=/main-worktree/.git
+            fi
+            container_gitdir_path="$container_git_dir/worktrees/$worktree_name"
+            tmp_gitfile="$tmp_dir/dotgit-$work_dir_hash"
+            echo "gitdir: $container_gitdir_path" >"$tmp_gitfile"
+            mounts+=(
+                --volume "$main_git_dir:$container_git_dir$bind_mode"
+                --volume "$tmp_gitfile:$masked_work_dir/.git:ro"
+            )
+        fi
+    fi
+}
+
+for i in "${!stage_dirs[@]}"; do
+    stage_dir "${stage_dirs[$i]}" "${stage_dir_modes[$i]}"
+done
+
+podman_args+=(--workdir "$container_pwd")
+[[ ${#run_args[@]} -gt 0 ]] || run_args=(bash)
+exec podman "${podman_args[@]}" "${mounts[@]}" "$IMAGE" "${run_args[@]}"

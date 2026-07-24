@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+
+printf 'PATH=%q\n' "$PATH" >"$HOME/.env.path"
+exec "$@"
