@@ -69,7 +69,10 @@ mount_if_present "$HOME/.local/state/claude" /home/user/.local/state/claude
 mount_if_present "$HOME/.codex" /home/user/.codex
 mount_if_present "$HOME/.pi" /home/user/.pi
 mount_if_present "$HOME/agent-memory" /home/user/agent-memory
-mount_if_present "$HOME/.config" /home/user/.config :ro
+mkdir -p "$HOME/.config"
+install -d -m 700 "$HOME/.config/firecrawl-cli"
+mount_if_present "$HOME/.config/firecrawl-cli" \
+    /home/user/.config/firecrawl-cli
 mount_if_present "$HOME/.cache" /home/user/.cache
 mount_if_present "$HOME/.gitconfig" /home/user/.gitconfig :ro
 

@@ -16,7 +16,7 @@ The image is based on Microsoft's Ubuntu Noble Playwright image and includes:
   lifecycle scripts disabled
 - pnpm, Pixi, stable Rust, ShellCheck, and a Pixi-managed `cli-utils`
   environment with Python, Ruff, fd, and ripgrep
-- Firecrawl CLI and Nextflow
+- Firecrawl CLI
 - Git, build tools, jq, Vim, PDF tools, and ImageMagick
 
 From the repository root:
@@ -49,7 +49,9 @@ The wrapper mounts agent state from `~/.claude`, `~/.codex`, and `~/.pi`. A
 top-level relative symlink in `~/.claude`, `~/.codex`, or `~/.pi/agent` gets its
 resolved target mounted at the corresponding relative container path. This also
 keeps existing Claude hooks working. Absolute symlinks work but expose their
-target path and produce a warning.
+target path and produce a warning. Firecrawl's `~/.config/firecrawl-cli` and
+`~/.cache` are writable; `~/.gitconfig` is read-only. The rest of host
+`~/.config` is not mounted.
 
 Rootless Podman's `keep-id` user namespace maps the host user to the image's
 neutral `user` account, keeping bind-mounted files writable. SELinux labeling
@@ -60,11 +62,11 @@ is disabled so pipod does not relabel agent configuration or project paths.
 The image's pinned pnpm does not use the host pnpm store or global packages, so
 a different host pnpm version is normally harmless. npm is used only to
 bootstrap pnpm; pnpm installs Pi, Firecrawl, and Playwright with
-`--ignore-scripts`. npm's bootstrap uses the same restriction. The Claude and
-Codex native
-installers receive exact versions. Keep those pins at least 48 hours old when
-updating them. Image builds and runtime pnpm commands enforce a 2,880-minute
-(48-hour) minimum release age.
+`--ignore-scripts`. npm's bootstrap uses the same restriction. The native
+Claude and Codex installers receive exact versions. Keep those pins at least
+48 hours old when updating them. Image builds and runtime pnpm commands enforce
+a 2,880-minute (48-hour) minimum release age through an environment override,
+independent of host pnpm configuration.
 
 Do not reuse host-created `node_modules` when host and container Node versions or
 platform libraries differ. Native addons and generated executable shims can be
