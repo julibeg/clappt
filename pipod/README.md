@@ -12,9 +12,12 @@ credentials and write access can still disclose or alter them.
 The image is based on Microsoft's Ubuntu Noble Playwright image and includes:
 
 - Chromium, Firefox, WebKit, and the Playwright CLI
-- Claude Code, Codex, and Pi, installed globally by pnpm with lifecycle scripts disabled
-- pnpm, Pixi, and stable Rust
-- Git, fd, ripgrep, build tools, jq, Vim, PDF tools, and ImageMagick
+- Claude Code and Codex from their native installers; Pi from pnpm with
+  lifecycle scripts disabled
+- pnpm, Pixi, stable Rust, ShellCheck, and a Pixi-managed `cli-utils`
+  environment with Python, Ruff, fd, and ripgrep
+- Firecrawl CLI and Nextflow
+- Git, build tools, jq, Vim, PDF tools, and ImageMagick
 
 From the repository root:
 
@@ -22,6 +25,8 @@ From the repository root:
 ./pipod/build.sh
 ./pipod/test.sh
 ```
+
+Output is also saved to `pipod/build.log` and `pipod/test.log`.
 
 Set `IMAGE` to use another tag. The default is the local-only tag
 `localhost/pipod:latest`; Podman will not confuse it with Docker Hub.
@@ -54,10 +59,12 @@ is disabled so pipod does not relabel agent configuration or project paths.
 
 The image's pinned pnpm does not use the host pnpm store or global packages, so
 a different host pnpm version is normally harmless. npm is used only to
-bootstrap pnpm; pnpm installs the agent and Playwright packages with
-`--ignore-scripts`, and npm's bootstrap uses the same restriction. Both image
-builds and runtime pnpm commands enforce a 2,880-minute (48-hour) minimum
-release age.
+bootstrap pnpm; pnpm installs Pi, Firecrawl, and Playwright with
+`--ignore-scripts`. npm's bootstrap uses the same restriction. The Claude and
+Codex native
+installers receive exact versions. Keep those pins at least 48 hours old when
+updating them. Image builds and runtime pnpm commands enforce a 2,880-minute
+(48-hour) minimum release age.
 
 Do not reuse host-created `node_modules` when host and container Node versions or
 platform libraries differ. Native addons and generated executable shims can be

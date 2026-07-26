@@ -46,7 +46,7 @@ trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
 
 podman_args=(
     run --rm --interactive --pull=missing
-    "--userns=keep-id:uid=1000,gid=1000" --user=user
+    "--userns=keep-id:uid=1001,gid=1001" --user=user
     --security-opt label=disable
     --env EDITOR=vim
     --env DISABLE_AUTOUPDATER=1
@@ -65,7 +65,6 @@ mount_if_present() {
 # Agent configuration and state. Agent executables are installed in the image.
 mount_if_present "$HOME/.claude" /home/user/.claude
 mount_if_present "$HOME/.claude.json" /home/user/.claude.json
-mount_if_present "$HOME/.local/share/claude" /home/user/.local/share/claude
 mount_if_present "$HOME/.local/state/claude" /home/user/.local/state/claude
 mount_if_present "$HOME/.codex" /home/user/.codex
 mount_if_present "$HOME/.pi" /home/user/.pi

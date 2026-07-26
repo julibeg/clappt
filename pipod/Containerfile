@@ -2,57 +2,85 @@ ARG PLAYWRIGHT_VERSION=1.61.1
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
-ARG PNPM_VERSION=11.17.0
+# Keep package pins at least MINIMUM_RELEASE_AGE old when updating them.
+ARG PNPM_VERSION=11.15.1
 ARG MINIMUM_RELEASE_AGE=2880
-ARG CLAUDE_VERSION=2.1.218
+ARG CLAUDE_VERSION=2.1.217
 ARG CODEX_VERSION=0.145.0
-ARG PI_VERSION=0.82.0
+ARG PI_VERSION=0.81.1
+ARG FIRECRAWL_VERSION=1.19.27
+ARG FD_VERSION=10.4.2
+ARG NEXTFLOW_VERSION=26.04.6
+ARG PYTHON_VERSION=3.13.14
+ARG RIPGREP_VERSION=15.2.0
+ARG RUFF_VERSION=0.15.22
 ARG PIXI_VERSION=0.66.0
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-        build-essential ca-certificates curl fd-find git imagemagick jq less \
-        poppler-utils procps ripgrep vim \
-    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+        build-essential ca-certificates curl git imagemagick jq less \
+        poppler-utils procps shellcheck vim \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PNPM_HOME=/usr/local/share/pnpm \
-    PATH=/usr/local/share/pnpm:$PATH
+    PATH=/usr/local/share/pnpm/bin:$PATH
 
 # npm only bootstraps pnpm; third-party CLIs are installed by pnpm without
 # lifecycle scripts.
 RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
-    && npm cache clean --force
+    && rm -rf /root/.npm
 
 RUN pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
-    add --global --ignore-scripts \
-        "@anthropic-ai/claude-code@$CLAUDE_VERSION" \
-        "@earendil-works/pi-coding-agent@$PI_VERSION" \
-        "@openai/codex@$CODEX_VERSION" \
-        "playwright@$PLAYWRIGHT_VERSION"
+    add --global --ignore-scripts "playwright@$PLAYWRIGHT_VERSION"
 
 RUN curl -fsSL https://pixi.sh/install.sh \
     | env PIXI_VERSION="v$PIXI_VERSION" PIXI_BIN_DIR=/usr/local/bin \
         PIXI_NO_PATH_UPDATE=1 bash
 
 # The Playwright image already contains an unprivileged `pwuser` and browsers.
-RUN usermod --login user --home /home/user --move-home pwuser \
+RUN test "$(id -u pwuser):$(id -g pwuser)" = 1001:1001 \
+    && usermod --login user --home /home/user --move-home pwuser \
     && groupmod --new-name user pwuser \
     && echo 'export PATH="/home/user/.cargo/bin:$PATH"' \
         >/etc/profile.d/pipod-path.sh \
-    && echo "minimum-release-age=$MINIMUM_RELEASE_AGE" >/home/user/.npmrc \
-    && chown user:user /home/user/.npmrc
+    && install -d -o user -g user /home/user/.config/pnpm \
+    && echo "minimumReleaseAge: $MINIMUM_RELEASE_AGE" \
+        >/home/user/.config/pnpm/config.yaml \
+    && chown user:user /home/user/.config/pnpm/config.yaml
 
 ENV HOME=/home/user \
     USER=user \
     LOGNAME=user \
     SHELL=/bin/bash \
-    PATH=/home/user/.cargo/bin:/home/user/.local/bin:/usr/local/share/pnpm:/usr/local/bin:/usr/bin:/bin \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PATH=/home/user/.cargo/bin:/home/user/.local/bin:/home/user/.pixi/bin:/usr/local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    DISABLE_AUTOUPDATER=1
 
 USER user
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
     | sh -s -- -y --profile minimal
+
+# Keep frequently updated agents late so their version bumps reuse earlier layers.
+USER root
+RUN HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+    add --global --ignore-scripts \
+        "@earendil-works/pi-coding-agent@$PI_VERSION" \
+        "firecrawl-cli@$FIRECRAWL_VERSION"
+
+RUN curl -fsSL https://chatgpt.com/codex/install.sh \
+    | CODEX_RELEASE="$CODEX_VERSION" CODEX_NON_INTERACTIVE=1 \
+        CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin sh
+
+USER user
+RUN pixi global install --environment cli-utils \
+    --expose fd --expose python --expose python3=python \
+    --expose rg --expose ruff \
+    "fd-find=$FD_VERSION" "python=$PYTHON_VERSION" \
+    "ripgrep=$RIPGREP_VERSION" "ruff=$RUFF_VERSION"
+RUN pixi global install --environment nextflow --expose nextflow \
+    --channel conda-forge --channel bioconda \
+    "nextflow=$NEXTFLOW_VERSION"
+RUN curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_VERSION"
 
 COPY --chown=user:user container-entrypoint /usr/local/bin/container-entrypoint
 ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
