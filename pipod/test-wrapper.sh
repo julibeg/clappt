@@ -11,7 +11,7 @@ rw_dir="$tmp_dir/rw"
 ro_dir="$tmp_dir/ro"
 mkdir -p "$home/.claude" "$home/.codex" "$home/.pi/agent" \
     "$home/.config/pnpm" "$home/.config/firecrawl-cli" \
-    "$home/.local/share/claude" "$bin"
+    "$home/.local/share/claude" "$home/.local/share/pnpm/store" "$bin"
 mkdir -p "$home/agent-targets"/{claude,codex,pi} "$rw_dir" "$ro_dir"
 ln -s ../agent-targets/claude "$home/.claude/skills"
 ln -s ../agent-targets/codex "$home/.codex/agents"
@@ -33,10 +33,13 @@ ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
 
 for expected in \
     "--userns=keep-id:uid=1001,gid=1001" \
+    "PNPM_CONFIG_IGNORE_SCRIPTS=true" \
+    "PNPM_CONFIG_STORE_DIR=/home/user/.local/share/pnpm/store" \
     "$home/agent-targets/claude:/home/user/agent-targets/claude" \
     "$home/agent-targets/codex:/home/user/agent-targets/codex" \
     "$home/agent-targets/pi:/home/user/agent-targets/pi" \
     "$home/.config/firecrawl-cli:/home/user/.config/firecrawl-cli" \
+    "$home/.local/share/pnpm/store:/home/user/.local/share/pnpm/store" \
     "$rw_dir:/work/$rw_hash/rw" \
     "$ro_dir:/work/$ro_hash/ro:ro" \
     "$rw_dir/.pixi-pipod:/work/$rw_hash/rw/.pixi"; do

@@ -50,6 +50,7 @@ podman_args=(
     --security-opt label=disable
     --env EDITOR=vim
     --env DISABLE_AUTOUPDATER=1
+    --env PNPM_CONFIG_IGNORE_SCRIPTS=true
 )
 [[ -t 1 ]] && podman_args+=(--tty)
 
@@ -68,6 +69,14 @@ mount_if_present "$HOME/.claude.json" /home/user/.claude.json
 mount_if_present "$HOME/.local/state/claude" /home/user/.local/state/claude
 mount_if_present "$HOME/.codex" /home/user/.codex
 mount_if_present "$HOME/.pi" /home/user/.pi
+# pnpm must use the store that ~/.pi/agent/npm/node_modules was linked from.
+pnpm_store="$HOME/.local/share/pnpm/store"
+mount_if_present "$pnpm_store" /home/user/.local/share/pnpm/store
+if [[ -d "$pnpm_store" ]]; then
+    podman_args+=(
+        --env PNPM_CONFIG_STORE_DIR=/home/user/.local/share/pnpm/store
+    )
+fi
 mount_if_present "$HOME/agent-memory" /home/user/agent-memory
 mkdir -p "$HOME/.config"
 install -d -m 700 "$HOME/.config/firecrawl-cli"
