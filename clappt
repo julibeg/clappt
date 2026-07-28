@@ -6,16 +6,21 @@ IMAGE="oras://docker.io/julibeg/clappt:latest"
 
 extra_args=()
 test_hooks=false
+gpu=false
 writeable_mm_env=""
 stage_dirs_arg=""
 stage_dirs_set=false
 
 usage() {
-    >&2 echo "Usage: $(basename "$0") [--test-hooks] [--stage-dirs DIRS] [--writeable-mm-env ENV] [--image IMAGE] [-- <apptainer args>]"
+    >&2 echo "Usage: $(basename "$0") [--gpu] [--test-hooks] [--stage-dirs DIRS] [--writeable-mm-env ENV] [--image IMAGE] [-- COMMAND ...]"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    --gpu)
+        gpu=true
+        shift
+        ;;
     --test-hooks)
         test_hooks=true
         shift
@@ -122,6 +127,7 @@ apptainer_flags=(
     "--env" "EDITOR=vim"
     "--bind" "$HOME/.config/firecrawl-cli:/home/user/.config/firecrawl-cli"
 )
+[[ "$gpu" == true ]] && apptainer_flags+=("--nv")
 
 # we keep track of all paths (inside the container) that we want to add to PATH to make
 # claude, micromamba, and rust work

@@ -38,7 +38,12 @@ Set `IMAGE` to use another tag. The default is the local-only tag
 ./pipod/pipod -- pi
 ./pipod/pipod -- claude
 ./pipod/pipod -- codex
+./pipod/pipod --gpu
 ```
+
+Use `--gpu` to expose NVIDIA devices and host driver libraries without requiring
+NVIDIA Container Toolkit. This is a manual fallback for older Podman versions;
+prefer CDI when it becomes available on the host.
 
 Use `--stage-dirs /path/one,/path/two:ro` to mount several absolute paths. Each
 is masked as `/work/<hash>/<basename>`; `:ro` makes one path read-only. Linked

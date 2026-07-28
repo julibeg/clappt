@@ -4,15 +4,20 @@ set -euo pipefail
 
 IMAGE="localhost/pipod:latest"
 run_args=()
+gpu=false
 stage_dirs_arg=""
 stage_dirs_set=false
 
 usage() {
-    >&2 echo "Usage: $(basename "$0") [--stage-dirs DIRS] [--image IMAGE] [-- COMMAND ...]"
+    >&2 echo "Usage: $(basename "$0") [--gpu] [--stage-dirs DIRS] [--image IMAGE] [-- COMMAND ...]"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    --gpu)
+        gpu=true
+        shift
+        ;;
     --stage-dirs)
         [[ $# -ge 2 ]] || { usage; exit 1; }
         stage_dirs_arg="$2"
@@ -55,6 +60,35 @@ podman_args=(
 [[ -t 1 ]] && podman_args+=(--tty)
 
 mounts=()
+if [[ "$gpu" == true ]]; then
+    gpu_devices=(/dev/nvidia[0-9]* /dev/nvidiactl /dev/nvidia-uvm \
+        /dev/nvidia-uvm-tools /dev/nvidia-caps/*)
+    existing_gpu_devices=()
+    for device in "${gpu_devices[@]}"; do
+        [[ -e "$device" ]] && existing_gpu_devices+=("$device")
+    done
+    [[ ${#existing_gpu_devices[@]} -gt 0 ]] || {
+        >&2 echo "ERROR: no NVIDIA devices found"
+        exit 1
+    }
+
+    driver_library=$(ldconfig -p | awk '$1 == "libcuda.so.1" { print $NF; exit }')
+    [[ -n "$driver_library" ]] || {
+        >&2 echo "ERROR: libcuda.so.1 not found"
+        exit 1
+    }
+    driver_dir=$(dirname "$(realpath "$driver_library")")
+
+    podman_args+=(--group-add keep-groups)
+    for device in "${existing_gpu_devices[@]}"; do
+        podman_args+=(--device "$device")
+    done
+    mounts+=(--volume "$driver_dir:/usr/local/lib/pipod-nvidia:ro")
+    podman_args+=(--env LD_LIBRARY_PATH=/usr/local/lib/pipod-nvidia)
+    if [[ -x /usr/bin/nvidia-smi ]]; then
+        mounts+=(--volume /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro)
+    fi
+fi
 mount_if_present() {
     local source="$1"
     local destination="$2"
