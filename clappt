@@ -207,7 +207,7 @@ fi
 # bind playwright cache if exists
 if [[ -d "$HOME/.cache/ms-playwright" ]]; then
     apptainer_flags+=(
-        "--bind" "$HOME/.cache/ms-playwright:/home/user/.cache/ms-playwright:ro"
+        "--bind" "$HOME/.cache/ms-playwright:/home/user/.cache/ms-playwright"
     )
 fi
 
