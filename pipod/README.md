@@ -65,14 +65,15 @@ is disabled so pipod does not relabel agent configuration or project paths.
 
 ## pnpm and host installs
 
-The image's pinned pnpm does not use the host pnpm store or global packages, so
-a different host pnpm version is normally harmless. npm is used only to
-bootstrap pnpm; pnpm installs Pi, Firecrawl, and Playwright with
-`--ignore-scripts`. npm's bootstrap uses the same restriction. The native
-Claude and Codex installers receive exact versions. Keep those pins at least
-48 hours old when updating them. Image builds and runtime pnpm commands enforce
-a 2,880-minute (48-hour) minimum release age through an environment override,
-independent of host pnpm configuration.
+Build-time pnpm installs do not use the host pnpm store or global packages. At
+runtime, the wrapper mounts the host store when present so packages linked from
+the mounted `~/.pi` state keep working; host global packages remain isolated. A
+different host pnpm version is normally harmless. npm is used only to bootstrap
+pnpm; pnpm installs Pi, Firecrawl, and Playwright with
+`--ignore-scripts`. Each image build installs the latest Claude and Codex
+releases and refreshes Pi to the newest release allowed by pnpm's 2,880-minute
+(48-hour) minimum release age. Runtime pnpm commands enforce the same release
+age through an environment override, independent of host pnpm configuration.
 
 Do not reuse host-created `node_modules` when host and container Node versions or
 platform libraries differ. Native addons and generated executable shims can be

@@ -5,9 +5,6 @@ ARG PLAYWRIGHT_VERSION
 # Keep package pins at least MINIMUM_RELEASE_AGE old when updating them.
 ARG PNPM_VERSION=11.15.1
 ARG MINIMUM_RELEASE_AGE=2880
-ARG CLAUDE_VERSION=2.1.217
-ARG CODEX_VERSION=0.145.0
-ARG PI_VERSION=0.81.1
 ARG FIRECRAWL_VERSION=1.19.27
 ARG FD_VERSION=10.4.2
 ARG PYTHON_VERSION=3.13.14
@@ -46,6 +43,7 @@ RUN test "$(id -u pwuser):$(id -g pwuser)" = 1001:1001 \
 ENV HOME=/home/user \
     USER=user \
     LOGNAME=user \
+    MPLCONFIGDIR=/home/user/.cache/matplotlib \
     SHELL=/bin/bash \
     PATH=/home/user/.cargo/bin:/home/user/.local/bin:/home/user/.pixi/bin:/usr/local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
@@ -56,25 +54,28 @@ USER user
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
     | sh -s -- -y --profile minimal
 
-# Keep frequently updated agents late so their version bumps reuse earlier layers.
-USER root
-RUN HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
-    add --global --ignore-scripts \
-        "@earendil-works/pi-coding-agent@$PI_VERSION" \
-        "firecrawl-cli@$FIRECRAWL_VERSION"
-
-RUN curl -fsSL https://chatgpt.com/codex/install.sh \
-    | CODEX_RELEASE="$CODEX_VERSION" CODEX_NON_INTERACTIVE=1 \
-        CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin sh
-
-USER user
 RUN pixi global install --environment cli-utils \
     --expose fd --expose python --expose python3=python \
     --expose rg --expose ruff \
     "fd-find=$FD_VERSION" matplotlib numpy pandas "python=$PYTHON_VERSION" \
     scikit-learn scipy seaborn \
     "ripgrep=$RIPGREP_VERSION" "ruff=$RUFF_VERSION"
-RUN curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_VERSION"
+
+# Keep frequently updated agents late and refresh them on every image build.
+USER root
+ARG AGENT_CACHE_BUST
+RUN : "$AGENT_CACHE_BUST" \
+    && HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+        add --global --ignore-scripts \
+            "@earendil-works/pi-coding-agent" \
+            "firecrawl-cli@$FIRECRAWL_VERSION"
+
+RUN curl -fsSL https://chatgpt.com/codex/install.sh \
+    | CODEX_NON_INTERACTIVE=1 \
+        CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin sh
+
+USER user
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 COPY --chown=user:user container-entrypoint /usr/local/bin/container-entrypoint
 ENTRYPOINT ["/usr/local/bin/container-entrypoint"]

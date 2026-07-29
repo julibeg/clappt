@@ -25,6 +25,7 @@ run_tests() {
             rg --version
             python --version
             python3 --version
+            test "$MPLCONFIGDIR" = /home/user/.cache/matplotlib
             python -c "import matplotlib, numpy, pandas, scipy, seaborn, sklearn"
             ruff --version
             shellcheck --version
