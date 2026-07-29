@@ -25,6 +25,7 @@ run_tests() {
             rg --version
             python --version
             python3 --version
+            python -c "import matplotlib, numpy, pandas, scipy, seaborn, sklearn"
             ruff --version
             shellcheck --version
             pnpm --version

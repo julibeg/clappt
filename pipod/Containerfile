@@ -71,7 +71,8 @@ USER user
 RUN pixi global install --environment cli-utils \
     --expose fd --expose python --expose python3=python \
     --expose rg --expose ruff \
-    "fd-find=$FD_VERSION" "python=$PYTHON_VERSION" \
+    "fd-find=$FD_VERSION" matplotlib numpy pandas "python=$PYTHON_VERSION" \
+    scikit-learn scipy seaborn \
     "ripgrep=$RIPGREP_VERSION" "ruff=$RUFF_VERSION"
 RUN curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_VERSION"
 

@@ -15,7 +15,8 @@ The image is based on Microsoft's Ubuntu Noble Playwright image and includes:
 - Claude Code and Codex from their native installers; Pi from pnpm with
   lifecycle scripts disabled
 - pnpm, Pixi, stable Rust, ShellCheck, and a Pixi-managed `cli-utils`
-  environment with Python, Ruff, fd, and ripgrep
+  environment with Python, Ruff, fd, ripgrep, pandas, NumPy, Matplotlib,
+  Seaborn, SciPy, and scikit-learn
 - Firecrawl CLI
 - Git, build tools, jq, Vim, PDF tools, and ImageMagick
 
