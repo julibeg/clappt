@@ -246,4 +246,10 @@ done
 
 podman_args+=(--workdir "$container_pwd")
 [[ ${#run_args[@]} -gt 0 ]] || run_args=(bash)
+if [[ "${run_args[0]}" == pi ]]; then
+    run_args=(
+        pi --model openai-codex/gpt-5.6-sol --thinking medium
+        "${run_args[@]:1}"
+    )
+fi
 exec podman "${podman_args[@]}" "${mounts[@]}" "$IMAGE" "${run_args[@]}"

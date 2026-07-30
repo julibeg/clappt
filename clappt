@@ -406,4 +406,11 @@ apptainer_flags+=(
     "--bind" "$tmp_group:/etc/group:ro"
 )
 
+if [[ ${#extra_args[@]} -gt 0 && "${extra_args[0]}" == pi ]]; then
+    extra_args=(
+        pi --model openai-codex/gpt-5.6-sol --thinking medium
+        "${extra_args[@]:1}"
+    )
+fi
+
 apptainer run "${apptainer_flags[@]}" "$IMAGE" "${extra_args[@]}"

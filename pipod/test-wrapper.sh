@@ -26,7 +26,7 @@ chmod +x "$bin/podman"
 
 output=$(
     HOME="$home" PATH="$bin:/usr/bin:/bin" \
-        "$script_dir/pipod" --stage-dirs "$rw_dir,$ro_dir:ro" -- echo ok
+        "$script_dir/pipod" --stage-dirs "$rw_dir,$ro_dir:ro" -- pi --version
 )
 rw_hash=$(printf %s "$rw_dir" | sha256sum | cut -c1-12)
 ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
@@ -47,6 +47,7 @@ for expected in \
     grep -Fqx -- "$expected" <<<"$output"
 done
 
+[[ "$output" == *$'pi\n--model\nopenai-codex/gpt-5.6-sol\n--thinking\nmedium\n--version' ]]
 [[ ! -e "$ro_dir/.pixi-pipod" ]]
 if grep -Fq -- "$ro_dir/.pixi-pipod:" <<<"$output"; then
     exit 1
