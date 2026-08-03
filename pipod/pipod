@@ -201,11 +201,11 @@ stage_dir() {
     mounts+=(--volume "$host_dir:$masked_work_dir$bind_mode")
 
     if [[ -f "$host_dir/pixi.toml" && -z "$bind_mode" ]]; then
-        if [[ ! -d "$host_dir/.pixi-pipod" ]]; then
-            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-pipod'"
-            mkdir -p "$host_dir/.pixi-pipod"
+        if [[ ! -d "$host_dir/.pixi-containers" ]]; then
+            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-containers'"
+            mkdir -p "$host_dir/.pixi-containers"
         fi
-        mounts+=(--volume "$host_dir/.pixi-pipod:$masked_work_dir/.pixi")
+        mounts+=(--volume "$host_dir/.pixi-containers:$masked_work_dir/.pixi")
     fi
 
     if [[ -f "$host_dir/.git" ]]; then

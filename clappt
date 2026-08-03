@@ -334,12 +334,12 @@ stage_dir() {
     if [[ -f "$host_dir/pixi.toml" && -z "$bind_mode" ]]; then
         # create `.pixi` shim dir (to be used instead of `.pixi` inside the container;
         # this avoids issues with absolute paths etc. as pixi will essentially create
-        # the env twice; once in `.pixi-clappt` and once in `.pixi`)
-        if [[ ! -d "$host_dir/.pixi-clappt" ]]; then
-            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-clappt'"
-            mkdir -p "$host_dir/.pixi-clappt"
+        # the env twice; once in `.pixi-containers` and once in `.pixi`)
+        if [[ ! -d "$host_dir/.pixi-containers" ]]; then
+            >&2 echo "INFO: Creating container pixi directory at '$host_dir/.pixi-containers'"
+            mkdir -p "$host_dir/.pixi-containers"
         fi
-        apptainer_flags+=("--bind" "$host_dir/.pixi-clappt:$masked_work_dir/.pixi")
+        apptainer_flags+=("--bind" "$host_dir/.pixi-containers:$masked_work_dir/.pixi")
     fi
 
     # check if we're in a linked git worktree (i.e. not the main worktree). If that's

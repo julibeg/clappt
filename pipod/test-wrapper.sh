@@ -43,13 +43,13 @@ for expected in \
     "$home/.local/share/pnpm/store:/home/user/.local/share/pnpm/store" \
     "$rw_dir:/work/$rw_hash/rw" \
     "$ro_dir:/work/$ro_hash/ro:ro" \
-    "$rw_dir/.pixi-pipod:/work/$rw_hash/rw/.pixi"; do
+    "$rw_dir/.pixi-containers:/work/$rw_hash/rw/.pixi"; do
     grep -Fqx -- "$expected" <<<"$output"
 done
 
 [[ "$output" == *$'pi\n--model\nopenai-codex/gpt-5.6-sol\n--thinking\nmedium\n--version' ]]
-[[ ! -e "$ro_dir/.pixi-pipod" ]]
-if grep -Fq -- "$ro_dir/.pixi-pipod:" <<<"$output"; then
+[[ ! -e "$ro_dir/.pixi-containers" ]]
+if grep -Fq -- "$ro_dir/.pixi-containers:" <<<"$output"; then
     exit 1
 fi
 for forbidden in \

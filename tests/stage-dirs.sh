@@ -32,7 +32,7 @@ ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
 grep -Fx -- "--nv" <<<"$output"
 grep -Fx -- "$rw_dir:/work/$rw_hash/rw" <<<"$output"
 grep -Fx -- "$ro_dir:/work/$ro_hash/ro:ro" <<<"$output"
-grep -Fx -- "$rw_dir/.pixi-clappt:/work/$rw_hash/rw/.pixi" <<<"$output"
-[[ ! -e "$ro_dir/.pixi-clappt" ]]
-! grep -F -- "$ro_dir/.pixi-clappt:" <<<"$output"
+grep -Fx -- "$rw_dir/.pixi-containers:/work/$rw_hash/rw/.pixi" <<<"$output"
+[[ ! -e "$ro_dir/.pixi-containers" ]]
+! grep -F -- "$ro_dir/.pixi-containers:" <<<"$output"
 [[ "$output" == *$'pi\n--model\nopenai-codex/gpt-5.6-sol\n--thinking\nmedium\n--version' ]]
