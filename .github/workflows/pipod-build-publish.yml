@@ -1,0 +1,47 @@
+name: Build and publish pipod image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - pipod/Containerfile
+      - pipod/container-entrypoint
+      - pipod/build.sh
+      - pipod/publish.sh
+      - .github/workflows/pipod-build-publish.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  USERNAME: julibeg
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Build image
+        run: ./pipod/build.sh
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | podman login docker.io \
+            --username "$USERNAME" --password-stdin
+
+      - name: Publish image (latest and commit)
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: ./pipod/publish.sh latest "$GIT_SHA"

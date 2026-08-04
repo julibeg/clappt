@@ -32,6 +32,16 @@ Output is also saved to `pipod/build.log` and `pipod/test.log`.
 Set `IMAGE` to use another tag. The default is the local-only tag
 `localhost/pipod:latest`; Podman will not confuse it with Docker Hub.
 
+After logging in to Docker Hub, publish the image with:
+
+```bash
+./pipod/publish.sh
+```
+
+This pushes `localhost/pipod:latest` to `docker.io/julibeg/pipod:latest`.
+Pass tags as arguments or set `IMAGE` and `IMAGE_REPO` to override the source
+image and destination repository.
+
 ## Wrapper
 
 ```bash

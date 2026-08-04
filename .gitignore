@@ -1,4 +1,5 @@
 *.sif
 *.log
 .*
+!.github/
 !**/.gitignore
