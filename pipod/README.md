@@ -40,7 +40,13 @@ Set `IMAGE` to use another tag. The default is the local-only tag
 ./pipod/pipod -- claude
 ./pipod/pipod -- codex
 ./pipod/pipod --gpu
+./pipod/pipod --publish 8000:8000 -- uvicorn app:app --host 0.0.0.0 --port 8000
 ```
+
+Use `--publish [HOST_IP:]HOST_PORT:CONTAINER_PORT[/PROTOCOL]` (repeat it for
+multiple ports) to expose a container port. Bind the app to `0.0.0.0` inside the
+container. Use a `127.0.0.1:` host address when access should be limited to the
+host.
 
 Use `--gpu` to expose NVIDIA devices and host driver libraries without requiring
 NVIDIA Container Toolkit. This is a manual fallback for older Podman versions;

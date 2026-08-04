@@ -26,7 +26,8 @@ chmod +x "$bin/podman"
 
 output=$(
     HOME="$home" PATH="$bin:/usr/bin:/bin" \
-        "$script_dir/pipod" --stage-dirs "$rw_dir,$ro_dir:ro" -- pi --version
+        "$script_dir/pipod" --publish 127.0.0.1:8000:8000 \
+        --stage-dirs "$rw_dir,$ro_dir:ro" -- pi --version
 )
 rw_hash=$(printf %s "$rw_dir" | sha256sum | cut -c1-12)
 ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
@@ -34,6 +35,8 @@ ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
 for expected in \
     "--pids-limit=-1" \
     "--userns=keep-id:uid=1001,gid=1001" \
+    "--publish" \
+    "127.0.0.1:8000:8000" \
     "PNPM_CONFIG_IGNORE_SCRIPTS=true" \
     "PNPM_CONFIG_STORE_DIR=/home/user/.local/share/pnpm/store" \
     "$home/agent-targets/claude:/home/user/agent-targets/claude" \
