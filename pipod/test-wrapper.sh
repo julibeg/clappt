@@ -34,6 +34,7 @@ ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
 
 for expected in \
     "--pids-limit=-1" \
+    "--tz=local" \
     "--userns=keep-id:uid=1001,gid=1001" \
     "--publish" \
     "127.0.0.1:8000:8000" \
@@ -47,7 +48,10 @@ for expected in \
     "$rw_dir:/work/$rw_hash/rw" \
     "$ro_dir:/work/$ro_hash/ro:ro" \
     "$rw_dir/.pixi-containers:/work/$rw_hash/rw/.pixi"; do
-    grep -Fqx -- "$expected" <<<"$output"
+    grep -Fqx -- "$expected" <<<"$output" || {
+        >&2 echo "ERROR: missing Podman argument: $expected"
+        exit 1
+    }
 done
 
 [[ "$output" == *$'pi\n--model\nopenai-codex/gpt-5.6-sol\n--thinking\nmedium\n--version' ]]

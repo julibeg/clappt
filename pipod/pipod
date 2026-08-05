@@ -56,7 +56,7 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
 
 podman_args=(
-    run --rm --interactive --pull=missing --pids-limit=-1
+    run --rm --interactive --pull=missing --pids-limit=-1 --tz=local
     "--userns=keep-id:uid=1001,gid=1001" --user=user
     --security-opt label=disable
     --env EDITOR=vim
