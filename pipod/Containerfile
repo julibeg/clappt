@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
 # Keep package pins at least MINIMUM_RELEASE_AGE old when updating them.
-ARG PNPM_VERSION=11.18.0
+ARG PNPM_VERSION=11.20.0
 ARG MINIMUM_RELEASE_AGE=2880
 ARG FIRECRAWL_VERSION=1.19.27
 ARG FD_VERSION=10.4.2
@@ -17,21 +17,6 @@ RUN apt-get update \
         build-essential ca-certificates curl git imagemagick jq less \
         poppler-utils procps shellcheck vim \
     && rm -rf /var/lib/apt/lists/*
-
-ENV PNPM_HOME=/usr/local/share/pnpm \
-    PATH=/usr/local/share/pnpm/bin:$PATH
-
-# npm only bootstraps pnpm; third-party CLIs are installed by pnpm without
-# lifecycle scripts.
-RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
-    && rm -rf /root/.npm
-
-RUN pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
-    add --global --ignore-scripts "playwright@$PLAYWRIGHT_VERSION"
-
-RUN curl -fsSL https://pixi.sh/install.sh \
-    | env PIXI_VERSION="v$PIXI_VERSION" PIXI_BIN_DIR=/usr/local/bin \
-        PIXI_NO_PATH_UPDATE=1 bash
 
 # The Playwright image already contains an unprivileged `pwuser` and browsers.
 RUN test "$(id -u pwuser):$(id -g pwuser)" = 1001:1001 \
@@ -50,6 +35,10 @@ ENV HOME=/home/user \
     DISABLE_AUTOUPDATER=1 \
     PNPM_CONFIG_MINIMUM_RELEASE_AGE=$MINIMUM_RELEASE_AGE
 
+RUN curl -fsSL https://pixi.sh/install.sh \
+    | env PIXI_VERSION="v$PIXI_VERSION" PIXI_BIN_DIR=/usr/local/bin \
+        PIXI_NO_PATH_UPDATE=1 bash
+
 USER user
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
     | sh -s -- -y --profile minimal
@@ -61,8 +50,19 @@ RUN pixi global install --environment cli-utils \
     scikit-learn scipy seaborn \
     "ripgrep=$RIPGREP_VERSION" "ruff=$RUFF_VERSION"
 
-# Keep frequently updated agents late and refresh them on every image build.
 USER root
+ENV PNPM_HOME=/usr/local/share/pnpm \
+    PATH=/usr/local/share/pnpm/bin:$PATH
+
+# npm only bootstraps pnpm; third-party CLIs are installed by pnpm without
+# lifecycle scripts.
+RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
+    && rm -rf /root/.npm
+
+RUN pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+    add --global --ignore-scripts "playwright@$PLAYWRIGHT_VERSION"
+
+# Keep frequently updated agents late and refresh them on every image build.
 ARG AGENT_CACHE_BUST
 RUN : "$AGENT_CACHE_BUST" \
     && HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
@@ -70,11 +70,10 @@ RUN : "$AGENT_CACHE_BUST" \
             "@earendil-works/pi-coding-agent" \
             "firecrawl-cli@$FIRECRAWL_VERSION"
 
-RUN curl -fsSL https://chatgpt.com/codex/install.sh \
-    | CODEX_NON_INTERACTIVE=1 \
-        CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin sh
-
 USER user
+RUN curl -fsSL https://chatgpt.com/codex/install.sh \
+    | CODEX_NON_INTERACTIVE=1 sh
+
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 COPY --chown=user:user container-entrypoint /usr/local/bin/container-entrypoint
