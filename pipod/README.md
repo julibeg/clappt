@@ -44,11 +44,16 @@ image and destination repository.
 
 ## Wrapper
 
+Example commands:
+
 ```bash
 ./pipod/pipod
-./pipod/pipod -- pi
-./pipod/pipod -- claude
-./pipod/pipod -- codex
+./pipod/pipod pi
+./pipod/pipod sol
+./pipod/pipod terra
+./pipod/pipod luna
+./pipod/pipod claude
+./pipod/pipod codex
 ./pipod/pipod --gpu
 ./pipod/pipod --publish 8000:8000 -- uvicorn app:app --host 0.0.0.0 --port 8000
 ```

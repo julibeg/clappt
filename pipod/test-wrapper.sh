@@ -24,10 +24,24 @@ printf '%s\n' "$@"
 EOF
 chmod +x "$bin/podman"
 
+for flag in -h --help; do
+    help_output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" "$flag")
+    for expected in \
+        "Usage: pipod [OPTIONS] [COMMAND ...]" \
+        "-h, --help" \
+        "--gpu" \
+        "--publish ADDRESS" \
+        "--stage-dirs DIRS" \
+        "--image IMAGE" \
+        "Special commands: sol, terra, luna (no arguments)"; do
+        grep -Fq -- "$expected" <<<"$help_output"
+    done
+done
+
 output=$(
     HOME="$home" PATH="$bin:/usr/bin:/bin" \
         "$script_dir/pipod" --publish 127.0.0.1:8000:8000 \
-        --stage-dirs "$rw_dir,$ro_dir:ro" -- pi --version
+        --stage-dirs "$rw_dir,$ro_dir:ro" pi --version
 )
 rw_hash=$(printf %s "$rw_dir" | sha256sum | cut -c1-12)
 ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
@@ -54,7 +68,25 @@ for expected in \
     }
 done
 
-[[ "$output" == *$'pi\n--model\nopenai-codex/gpt-5.6-sol\n--thinking\nmedium\n--version' ]]
+[[ "$output" == *$'pi\n--version' ]]
+output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" echo hi)
+[[ "$output" == *$'echo\nhi' ]]
+for command_and_model in \
+    "sol openai-codex/gpt-5.6-sol" \
+    "terra openai-codex/gpt-5.6-terra" \
+    "luna openai-codex/gpt-5.6-luna"; do
+    read -r command model <<<"$command_and_model"
+    output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" \
+        "$command")
+    [[ "$output" == *$'pi\n--model\n'"$model"$'\n--thinking\nmedium' ]]
+done
+if error_output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" \
+    terra --version 2>&1); then
+    >&2 echo "ERROR: terra accepted arguments"
+    exit 1
+fi
+[[ "$error_output" == *"ERROR: terra does not accept arguments"* ]]
+[[ "$error_output" == *"Special commands: sol, terra, luna (no arguments)"* ]]
 [[ ! -e "$ro_dir/.pixi-containers" ]]
 if grep -Fq -- "$ro_dir/.pixi-containers:" <<<"$output"; then
     exit 1

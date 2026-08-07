@@ -10,28 +10,43 @@ stage_dirs_set=false
 publishes=()
 
 usage() {
-    >&2 echo "Usage: $(basename "$0") [--gpu] [--publish PUBLISH] [--stage-dirs DIRS] [--image IMAGE] [-- COMMAND ...]"
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [COMMAND ...]
+
+Options:
+  -h, --help             Show this help message
+  --gpu                  Pass NVIDIA devices through to the container
+  --publish ADDRESS      Publish a container port
+  --stage-dirs DIRS      Comma-separated absolute directories to mount
+  --image IMAGE          Container image (default: $IMAGE)
+
+Special commands: sol, terra, luna (no arguments)
+EOF
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
     --gpu)
         gpu=true
         shift
         ;;
     --publish)
-        [[ $# -ge 2 ]] || { usage; exit 1; }
+        [[ $# -ge 2 ]] || { usage >&2; exit 1; }
         publishes+=("$2")
         shift 2
         ;;
     --stage-dirs)
-        [[ $# -ge 2 ]] || { usage; exit 1; }
+        [[ $# -ge 2 ]] || { usage >&2; exit 1; }
         stage_dirs_arg="$2"
         stage_dirs_set=true
         shift 2
         ;;
     --image)
-        [[ $# -ge 2 ]] || { usage; exit 1; }
+        [[ $# -ge 2 ]] || { usage >&2; exit 1; }
         IMAGE="$2"
         shift 2
         ;;
@@ -46,6 +61,17 @@ while [[ $# -gt 0 ]]; do
         ;;
     esac
 done
+
+case "${run_args[0]:-}" in
+sol|terra|luna)
+    [[ ${#run_args[@]} -eq 1 ]] || {
+        >&2 echo "ERROR: ${run_args[0]} does not accept arguments"
+        usage >&2
+        exit 1
+    }
+    run_args=(pi --model "openai-codex/gpt-5.6-${run_args[0]}" --thinking medium)
+    ;;
+esac
 
 command -v podman >/dev/null || {
     >&2 echo "ERROR: podman not found"
@@ -255,10 +281,4 @@ done
 
 podman_args+=(--workdir "$container_pwd")
 [[ ${#run_args[@]} -gt 0 ]] || run_args=(bash)
-if [[ "${run_args[0]}" == pi ]]; then
-    run_args=(
-        pi --model openai-codex/gpt-5.6-sol --thinking medium
-        "${run_args[@]:1}"
-    )
-fi
 exec podman "${podman_args[@]}" "${mounts[@]}" "$IMAGE" "${run_args[@]}"
