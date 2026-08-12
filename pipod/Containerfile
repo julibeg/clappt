@@ -59,7 +59,7 @@ ENV PNPM_HOME=/usr/local/share/pnpm \
 RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
     && rm -rf /root/.npm
 
-RUN pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+RUN HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
     add --global --ignore-scripts "playwright@$PLAYWRIGHT_VERSION"
 
 # Keep frequently updated agents late and refresh them on every image build.
