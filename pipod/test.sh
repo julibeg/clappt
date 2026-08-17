@@ -3,9 +3,12 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 image=${IMAGE:-localhost/pipod:latest}
+podman_data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+podman_config_home=${XDG_CONFIG_HOME:-$HOME/.config}
 output_dir=$(mktemp -d)
 config_dir=$output_dir/config
-mkdir -p "$config_dir/pnpm"
+wrapper_home=$output_dir/home
+mkdir -p "$config_dir/pnpm" "$wrapper_home/.codex"
 printf 'minimumReleaseAge: 1\n' >"$config_dir/pnpm/config.yaml"
 trap 'rm -rf "$output_dir"' EXIT
 
@@ -16,6 +19,7 @@ run_tests() {
         "--userns=keep-id:uid=1001,gid=1001" --user=user \
         --security-opt label=disable \
         --volume "$config_dir:/home/user/.config:ro" \
+        --volume "$wrapper_home/.codex:/home/user/.codex" \
         --volume "$output_dir:/output" \
         "$image" bash -lc '
             set -euo pipefail
@@ -43,6 +47,10 @@ run_tests() {
                 "data:text/html,<h1>Playwright works</h1>" /output/playwright.png
             test -s /output/playwright.png
         '
+
+    HOME="$wrapper_home" XDG_CONFIG_HOME="$podman_config_home" \
+        XDG_DATA_HOME="$podman_data_home" \
+        "$script_dir/pipod" --image "$image" codex --version
 
     echo "Image OK"
 }
