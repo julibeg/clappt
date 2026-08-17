@@ -67,9 +67,10 @@ Use `--gpu` to expose NVIDIA devices and host driver libraries without requiring
 NVIDIA Container Toolkit. This is a manual fallback for older Podman versions;
 prefer CDI when it becomes available on the host.
 
-Use `--stage-dirs /path/one,/path/two:ro` to mount several absolute paths. Each
-is masked as `/work/<hash>/<basename>`; `:ro` makes one path read-only. Linked
-Git worktrees are handled automatically. Pixi projects use `.pixi-containers` for
+Use `--stage-dirs /path/one,/path/two:ro` to mount several absolute paths. The
+container starts in a temporary, writable `/work`. Each path is masked as
+`/work/<hash>/<basename>`; `:ro` makes one path read-only. Linked Git worktrees
+are handled automatically. Pixi projects use `.pixi-containers` for
 a container-specific environment instead of reusing the host `.pixi` directory.
 
 The wrapper mounts agent state from `~/.claude`, `~/.codex`, and `~/.pi`. A

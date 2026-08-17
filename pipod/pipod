@@ -199,6 +199,9 @@ if [[ "$stage_dirs_set" == true ]]; then
         exit 1
     fi
     IFS=',' read -r -a raw_stage_dirs <<<"$stage_dirs_arg"
+    tmp_work="$tmp_dir/work"
+    mkdir "$tmp_work"
+    mounts+=(--volume "$tmp_work:/work")
 else
     raw_stage_dirs=("$PWD")
 fi

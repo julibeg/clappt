@@ -20,6 +20,14 @@ touch "$rw_dir/pixi.toml" "$ro_dir/pixi.toml"
 
 cat >"$bin/podman" <<'EOF'
 #!/bin/bash
+set -euo pipefail
+for arg in "$@"; do
+    if [[ "$arg" == *:/work ]]; then
+        work_dir=${arg%:/work}
+        [[ -w "$work_dir" ]]
+        touch "$work_dir/test-write"
+    fi
+done
 printf '%s\n' "$@"
 EOF
 chmod +x "$bin/podman"
@@ -45,6 +53,12 @@ output=$(
 )
 rw_hash=$(printf %s "$rw_dir" | sha256sum | cut -c1-12)
 ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
+work_mount=$(grep -E '^[^:]+:/work$' <<<"$output")
+[[ "$work_mount" == */work:/work ]]
+work_line=$(grep -n -E '^[^:]+:/work$' <<<"$output" | cut -d: -f1)
+rw_line=$(grep -n -F "$rw_dir:/work/$rw_hash/rw" <<<"$output" | cut -d: -f1)
+((work_line < rw_line))
+[[ "$output" == *$'--workdir\n/work'* ]]
 
 for expected in \
     "--pids-limit=-1" \
@@ -71,6 +85,9 @@ done
 [[ "$output" == *$'pi\n--version' ]]
 output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" echo hi)
 [[ "$output" == *$'echo\nhi' ]]
+if grep -Eq '^[^:]+:/work$' <<<"$output"; then
+    exit 1
+fi
 for command_and_model in \
     "sol openai-codex/gpt-5.6-sol" \
     "terra openai-codex/gpt-5.6-terra" \

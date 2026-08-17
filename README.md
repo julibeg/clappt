@@ -11,7 +11,7 @@ This Apptainer image & wrapper script just try to marginally improve privacy by 
 
 The wrapper masks the host user name and paths inside the container.
 It overlays `/etc/passwd` and `/etc/group` to replace the host username with `user` and binds the current working directory to a masked path under `/work`.
-Use `--stage-dirs /path/one,/path/two:ro` to bind absolute paths instead; a `:ro` suffix makes an individual directory read-only. Each gets its own `/work/<hash>/<name>` path and the container starts in `/work`.
+Use `--stage-dirs /path/one,/path/two:ro` to bind absolute paths instead; a `:ro` suffix makes an individual directory read-only. Each gets its own `/work/<hash>/<name>` path and the container starts in a temporary, writable `/work`.
 Use `--gpu` to expose NVIDIA GPUs and host driver libraries via Apptainer's
 `--nv` support.
 Overlaying `/etc/passwd` and `/etc/group` is hacky, but provides obfuscation without breaking things in most cases.
