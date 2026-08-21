@@ -10,8 +10,9 @@ bin="$tmp_dir/bin"
 rw_dir="$tmp_dir/rw"
 ro_dir="$tmp_dir/ro"
 mkdir -p "$home/.claude" "$home/.codex" "$home/.pi/agent" \
-    "$home/.config/pnpm" "$home/.config/firecrawl-cli" \
-    "$home/.local/share/claude" "$home/.local/share/pnpm/store" "$bin"
+    "$home/.cache/uv" "$home/.config/pnpm" \
+    "$home/.config/firecrawl-cli" "$home/.local/share/claude" \
+    "$home/.local/share/pnpm/store" "$bin"
 mkdir -p "$home/agent-targets"/{claude,codex,pi} "$rw_dir" "$ro_dir"
 ln -s ../agent-targets/claude "$home/.claude/skills"
 ln -s ../agent-targets/codex "$home/.codex/agents"
@@ -71,6 +72,7 @@ for expected in \
     "$home/agent-targets/claude:/home/user/agent-targets/claude" \
     "$home/agent-targets/codex:/home/user/agent-targets/codex" \
     "$home/agent-targets/pi:/home/user/agent-targets/pi" \
+    "$home/.cache:/home/user/.cache" \
     "$home/.config/firecrawl-cli:/home/user/.config/firecrawl-cli" \
     "$home/.local/share/pnpm/store:/home/user/.local/share/pnpm/store" \
     "$rw_dir:/work/$rw_hash/rw" \
