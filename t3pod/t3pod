@@ -14,7 +14,7 @@ if [[ $# -eq 0 ]]; then
   exit 1
 fi
 
-mkdir -p ~/.t3-container-state
+mkdir -p ~/.t3-container-state ~/.cache/uv
 
 # stage projects by basename under /work; duplicate basenames would collide (checked by
 # associative array `project_names`)
@@ -64,7 +64,7 @@ done
 
 # shellcheck disable=SC2016
 container_command=(bash -lc '
-    export PATH="/root/.local/share/pnpm/bin:$PATH"
+    export PATH="/usr/local/bin:/home/user/micromamba/envs/cli-utils/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:$PATH"
     t3 --no-browser --host 0.0.0.0 --port 3773
 ')
 # never pull: only the image produced by `build.sh` may run
@@ -92,8 +92,9 @@ podman "${podman_args[@]}" \
 -v "$claude_hooks_dir:/home/user/git/clappt/hooks:ro" \
 -v "$agents_dir:/home/user/git/agents-stuff:ro" \
 -v "$HOME/agent-memory:/home/user/agent-memory" \
+-v "$HOME/.cache/uv:/home/user/.cache/uv" \
 -w "$container_project_dir" \
--e "PATH=$container_cli_utils_env/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+-e "PATH=/usr/local/bin:$container_cli_utils_env/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
 -e HOME=/home/user \
 -e DISABLE_AUTOUPDATER=1 \
 -e T3CODE_MODE=web \

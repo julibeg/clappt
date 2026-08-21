@@ -16,6 +16,7 @@ cp "$(realpath "$(command -v pixi)")" "$build_tmp_dir/pixi-build"
 # forward optional build flags and retain a complete log; pipefail preserves the
 # podman exit status through tee
 podman build \
+  --build-arg "AGENT_CACHE_BUST=$(date -u +%s)" \
   --build-arg "T3_VERSION=$t3_version" \
   --build-arg "PLAYWRIGHT_VERSION=$playwright_version" \
   --tag t3code:latest \
