@@ -41,6 +41,7 @@ for flag in -h --help; do
         "--gpu" \
         "--publish ADDRESS" \
         "--stage-dirs DIRS" \
+        "--flat-stage-dirs" \
         "--image IMAGE" \
         "Special commands: sol, terra, luna (no arguments)"; do
         grep -Fq -- "$expected" <<<"$help_output"
@@ -69,12 +70,14 @@ for expected in \
     "127.0.0.1:8000:8000" \
     "PNPM_CONFIG_IGNORE_SCRIPTS=true" \
     "PNPM_CONFIG_STORE_DIR=/home/user/.local/share/pnpm/store" \
+    "T3CODE_HOME=/data" \
     "$home/agent-targets/claude:/home/user/agent-targets/claude" \
     "$home/agent-targets/codex:/home/user/agent-targets/codex" \
     "$home/agent-targets/pi:/home/user/agent-targets/pi" \
     "$home/.cache:/home/user/.cache" \
     "$home/.config/firecrawl-cli:/home/user/.config/firecrawl-cli" \
     "$home/.local/share/pnpm/store:/home/user/.local/share/pnpm/store" \
+    "$home/.t3-container-state:/data" \
     "$rw_dir:/work/$rw_hash/rw" \
     "$ro_dir:/work/$ro_hash/ro:ro" \
     "$rw_dir/.pixi-containers:/work/$rw_hash/rw/.pixi"; do
@@ -83,6 +86,32 @@ for expected in \
         exit 1
     }
 done
+
+flat_output=$(
+    HOME="$home" PATH="$bin:/usr/bin:/bin" \
+        "$script_dir/pipod" --flat-stage-dirs \
+        --stage-dirs "$rw_dir,$ro_dir:ro" pi --version
+)
+for expected in \
+    "$rw_dir:/work/rw" \
+    "$ro_dir:/work/ro:ro" \
+    "$rw_dir/.pixi-containers:/work/rw/.pixi"; do
+    grep -Fqx -- "$expected" <<<"$flat_output" || {
+        >&2 echo "ERROR: missing flat Podman mount: $expected"
+        exit 1
+    }
+done
+
+mkdir -p "$tmp_dir/a/same" "$tmp_dir/b/same"
+if error_output=$(
+    HOME="$home" PATH="$bin:/usr/bin:/bin" \
+        "$script_dir/pipod" --flat-stage-dirs \
+        --stage-dirs "$tmp_dir/a/same,$tmp_dir/b/same" 2>&1
+); then
+    >&2 echo "ERROR: flat staging accepted duplicate directory names"
+    exit 1
+fi
+[[ "$error_output" == *"ERROR: staged directory name clashes: 'same'"* ]]
 
 [[ "$output" == *$'pi\n--version' ]]
 output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" echo hi)

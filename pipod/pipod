@@ -7,6 +7,7 @@ run_args=()
 gpu=false
 stage_dirs_arg=""
 stage_dirs_set=false
+flat_stage_dirs=false
 publishes=()
 
 usage() {
@@ -18,6 +19,7 @@ Options:
   --gpu                  Pass NVIDIA devices through to the container
   --publish ADDRESS      Publish a container port
   --stage-dirs DIRS      Comma-separated absolute directories to mount
+  --flat-stage-dirs      Mount staged directories directly under /work
   --image IMAGE          Container image (default: $IMAGE)
 
 Special commands: sol, terra, luna (no arguments)
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
         stage_dirs_arg="$2"
         stage_dirs_set=true
         shift 2
+        ;;
+    --flat-stage-dirs)
+        flat_stage_dirs=true
+        shift
         ;;
     --image)
         [[ $# -ge 2 ]] || { usage >&2; exit 1; }
@@ -88,6 +94,7 @@ podman_args=(
     --env EDITOR=vim
     --env DISABLE_AUTOUPDATER=1
     --env PNPM_CONFIG_IGNORE_SCRIPTS=true
+    --env T3CODE_HOME=/data
 )
 [[ -t 1 ]] && podman_args+=(--tty)
 for publish in "${publishes[@]}"; do
@@ -147,6 +154,8 @@ if [[ -d "$pnpm_store" ]]; then
     )
 fi
 mount_if_present "$HOME/agent-memory" /home/user/agent-memory
+mkdir -p "$HOME/.t3-container-state"
+mount_if_present "$HOME/.t3-container-state" /data
 mkdir -p "$HOME/.config"
 install -d -m 700 "$HOME/.config/firecrawl-cli"
 mount_if_present "$HOME/.config/firecrawl-cli" \
@@ -228,6 +237,7 @@ for raw_stage_dir in "${raw_stage_dirs[@]}"; do
 done
 
 container_pwd=/work
+declare -A staged_names=()
 stage_dir() {
     local host_dir="$1"
     local bind_mode="$2"
@@ -235,7 +245,16 @@ stage_dir() {
 
     work_dir_name=$(basename "$host_dir")
     work_dir_hash=$(printf %s "$host_dir" | sha256sum | cut -c1-12)
-    masked_work_dir="/work/$work_dir_hash/$work_dir_name"
+    if [[ "$flat_stage_dirs" == true ]]; then
+        [[ ! ${staged_names[$work_dir_name]+set} ]] || {
+            >&2 echo "ERROR: staged directory name clashes: '$work_dir_name'"
+            exit 1
+        }
+        staged_names[$work_dir_name]=1
+        masked_work_dir="/work/$work_dir_name"
+    else
+        masked_work_dir="/work/$work_dir_hash/$work_dir_name"
+    fi
     [[ "$stage_dirs_set" == true ]] || container_pwd="$masked_work_dir"
     mounts+=(--volume "$host_dir:$masked_work_dir$bind_mode")
 

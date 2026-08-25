@@ -12,8 +12,7 @@ credentials and write access can still disclose or alter them.
 The image is based on Microsoft's Ubuntu Noble Playwright image and includes:
 
 - Chromium, Firefox, WebKit, and the Playwright CLI
-- Claude Code and Codex from their native installers; Pi from pnpm with
-  lifecycle scripts disabled
+- Claude Code and Codex from their native installers; Pi and T3 Code from pnpm
 - pnpm, Pixi, stable Rust, ShellCheck, and a Pixi-managed `cli-utils`
   environment with Python, Ruff, fd, ripgrep, pandas, NumPy, Matplotlib,
   Seaborn, SciPy, and scikit-learn
@@ -54,6 +53,7 @@ Example commands:
 ./pipod/pipod luna
 ./pipod/pipod claude
 ./pipod/pipod codex
+./t3pod/t3pod /path/to/project
 ./pipod/pipod --gpu
 ./pipod/pipod --publish 8000:8000 -- uvicorn app:app --host 0.0.0.0 --port 8000
 ```
@@ -69,11 +69,14 @@ prefer CDI when it becomes available on the host.
 
 Use `--stage-dirs /path/one,/path/two:ro` to mount several absolute paths. The
 container starts in a temporary, writable `/work`. Each path is masked as
-`/work/<hash>/<basename>`; `:ro` makes one path read-only. Linked Git worktrees
+`/work/<hash>/<basename>`; `:ro` makes one path read-only. Add
+`--flat-stage-dirs` to mount them as `/work/<basename>` instead. Duplicate
+basenames then fail rather than sharing a mount point. Linked Git worktrees
 are handled automatically. Pixi projects use `.pixi-containers` for
 a container-specific environment instead of reusing the host `.pixi` directory.
 
-The wrapper mounts agent state from `~/.claude`, `~/.codex`, and `~/.pi`. A
+The wrapper mounts agent state from `~/.claude`, `~/.codex`, and `~/.pi`, plus
+T3 Code state from `~/.t3-container-state`. A
 top-level relative symlink in `~/.claude`, `~/.codex`, or `~/.pi/agent` gets its
 resolved target mounted at the corresponding relative container path. This also
 keeps existing Claude hooks working. Absolute symlinks work but expose their
@@ -91,11 +94,12 @@ Build-time pnpm installs do not use the host pnpm store or global packages. At
 runtime, the wrapper mounts the host store when present so packages linked from
 the mounted `~/.pi` state keep working; host global packages remain isolated. A
 different host pnpm version is normally harmless. npm is used only to bootstrap
-pnpm; pnpm installs Pi, Firecrawl, and Playwright with
-`--ignore-scripts`. Each image build installs the latest Claude and Codex
-releases and refreshes Pi to the newest release allowed by pnpm's 2,880-minute
-(48-hour) minimum release age. Runtime pnpm commands enforce the same release
-age through an environment override, independent of host pnpm configuration.
+pnpm; pnpm installs Pi, Firecrawl, and Playwright with `--ignore-scripts`.
+T3 Code allows only `node-pty`'s required native build. Each image build installs
+the latest Claude and Codex releases and refreshes Pi and T3 Code to the newest
+releases allowed by pnpm's 2,880-minute (48-hour) minimum release age. Runtime
+npm and pnpm commands enforce the same release age through environment
+overrides, independent of host configuration.
 
 Do not reuse host-created `node_modules` when host and container Node versions or
 platform libraries differ. Native addons and generated executable shims can be

@@ -1,107 +1,41 @@
 #!/bin/bash
-
 set -euo pipefail
 
-# debug mode opens a shell with the same mounts instead of starting T3 Code
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+pipod="$script_dir/../pipod/pipod"
 debug=false
 if [[ "${1:-}" == --debug ]]; then
-  debug=true
-  shift
+    debug=true
+    shift
 fi
 
 if [[ $# -eq 0 ]]; then
-  echo "Usage: $0 [--debug] PROJECT_DIR [PROJECT_DIR ...]" >&2
-  exit 1
+    echo "Usage: $0 [--debug] PROJECT_DIR [PROJECT_DIR ...]" >&2
+    exit 1
 fi
 
-mkdir -p ~/.t3-container-state ~/.cache/uv
-
-# stage projects by basename under /work; duplicate basenames would collide (checked by
-# associative array `project_names`)
-project_mounts=()
-declare -A project_names=()
-for raw_project_dir in "$@"; do
-  project_dir=$(realpath "$raw_project_dir")
-  if [[ ! -d "$project_dir" ]]; then
-    echo "Error: $project_dir is not a directory" >&2
-    exit 1
-  fi
-
-  project_name=$(basename "$project_dir")
-  if [[ -n "${project_names[$project_name]:-}" ]]; then
-    echo "Error: project directory name clashes: $project_name" >&2
-    exit 1
-  fi
-  project_names[$project_name]="$project_dir"
-
-  container_dir="/work/$project_name"
-  project_mounts+=(-v "$project_dir:$container_dir")
+project_dirs=()
+for project_dir in "$@"; do
+    project_dir=$(realpath "$project_dir")
+    [[ -d "$project_dir" ]] || {
+        echo "Error: $project_dir is not a directory" >&2
+        exit 1
+    }
+    project_dirs+=("$project_dir")
 done
 
-# start inside the sole project, or at `/work` when several projects are staged
-if [[ $# -gt 1 ]]; then
-  container_project_dir="/work"
+pipod_args=(--flat-stage-dirs)
+if [[ ${#project_dirs[@]} -eq 1 ]]; then
+    cd "${project_dirs[0]}"
 else
-  container_project_dir="$container_dir"
+    stage_dirs=$(IFS=,; echo "${project_dirs[*]}")
+    pipod_args+=(--stage-dirs "$stage_dirs")
 fi
 
-pnpm_home="$HOME/.local/share/pnpm"
-cli_utils_env="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}/envs/cli-utils"
-container_cli_utils_env="/home/user/micromamba/envs/cli-utils"
-claude_bin="$HOME/.local/bin/claude"
-claude_hooks_dir="$HOME/git/clappt/hooks"
-# these approved roots resolve external agent symlinks without exposing arbitrary
-# symlink targets
-agents_dir="$HOME/git/agents-stuff"
-
-for required_path in \
-  "$agents_dir" "$claude_hooks_dir" "$claude_bin" "$cli_utils_env"; do
-  if [[ ! -e "$required_path" ]]; then
-    echo "Error: required host path not found: $required_path" >&2
-    exit 1
-  fi
-done
-
-# shellcheck disable=SC2016
-container_command=(bash -lc '
-    export PATH="/usr/local/bin:/home/user/micromamba/envs/cli-utils/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:$PATH"
-    t3 --no-browser --host 0.0.0.0 --port 3773
-')
-# never pull: only the image produced by `build.sh` may run
-podman_args=(run --rm --pull=never -it)
 if [[ "$debug" == true ]]; then
-  container_command=(bash)
-else
-  podman_args+=(
-    --replace
-    --name t3code
-    -p 127.0.0.1:3773:3773
-  )
+    exec "$pipod" "${pipod_args[@]}" bash
 fi
 
-# tool installations and agent definitions are read-only; state and memory persist
-podman "${podman_args[@]}" \
-"${project_mounts[@]}" \
--v "$HOME/.t3-container-state:/data" \
--v "$pnpm_home:/root/.local/share/pnpm:ro" \
--v "$cli_utils_env:$container_cli_utils_env:ro" \
--v "$HOME/.codex:/home/user/.codex" \
--v "$HOME/.claude:/home/user/.claude" \
--v "$HOME/.claude.json:/home/user/.claude.json" \
--v "$claude_bin:/home/user/.local/bin/claude:ro" \
--v "$claude_hooks_dir:/home/user/git/clappt/hooks:ro" \
--v "$agents_dir:/home/user/git/agents-stuff:ro" \
--v "$HOME/agent-memory:/home/user/agent-memory" \
--v "$HOME/.cache/uv:/home/user/.cache/uv" \
--w "$container_project_dir" \
--e "PATH=/usr/local/bin:$container_cli_utils_env/bin:/home/user/.local/bin:/root/.local/share/pnpm/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
--e HOME=/home/user \
--e DISABLE_AUTOUPDATER=1 \
--e T3CODE_MODE=web \
--e T3CODE_HOST=0.0.0.0 \
--e T3CODE_PORT=3773 \
--e T3CODE_NO_BROWSER=true \
--e T3CODE_HOME=/data \
-t3code:latest \
-/usr/local/bin/t3pod-entrypoint \
-"${container_command[@]}"
+exec "$pipod" "${pipod_args[@]}" \
+    --publish 127.0.0.1:3773:3773 -- \
+    t3 --no-browser --host 0.0.0.0 --port 3773

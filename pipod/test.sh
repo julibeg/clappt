@@ -37,6 +37,7 @@ run_tests() {
             ruff --version
             uv --version
             shellcheck --version
+            npm config get min-release-age | grep -Fx 2880
             pnpm --version
             pnpm config get minimumReleaseAge | grep -Fx 2880
             pixi --version
@@ -46,6 +47,21 @@ run_tests() {
             codex --version
             pi --version
             firecrawl --version
+            t3 --version
+            t3 connect link --help >/dev/null
+            status=$(t3 connect status --json)
+            jq -e \
+                '\''.relayClient.status | strings | select(. != "unsupported")'\'' \
+                <<<"$status" >/dev/null
+            set +e
+            timeout 5 t3 --no-browser --host 127.0.0.1 --port 3773 \
+                >/tmp/t3-start.log 2>&1
+            t3_status=$?
+            set -e
+            if [[ $t3_status -ne 124 ]]; then
+                cat /tmp/t3-start.log >&2
+                exit 1
+            fi
             playwright --version
             playwright screenshot --browser chromium \
                 "data:text/html,<h1>Playwright works</h1>" /output/playwright.png
