@@ -11,6 +11,7 @@ bin="$tmp_dir/bin"
 rw_dir="$tmp_dir/rw"
 ro_dir="$tmp_dir/ro"
 mkdir -p "$home/.claude" "$home/.codex" "$home/.pi/agent" "$bin"
+touch "$home/.gitconfig"
 mkdir "$rw_dir" "$ro_dir"
 touch "$rw_dir/pixi.toml" "$ro_dir/pixi.toml"
 
@@ -38,6 +39,7 @@ rw_hash=$(printf %s "$rw_dir" | sha256sum | cut -c1-12)
 ro_hash=$(printf %s "$ro_dir" | sha256sum | cut -c1-12)
 
 grep -Fx -- "--nv" <<<"$output"
+grep -Fx -- "$home/.gitconfig:/home/user/.gitconfig:ro" <<<"$output"
 work_mount=$(grep -E '^[^:]+:/work$' <<<"$output")
 [[ "$work_mount" == */work:/work ]]
 work_line=$(grep -n -E '^[^:]+:/work$' <<<"$output" | cut -d: -f1)

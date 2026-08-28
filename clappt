@@ -127,6 +127,9 @@ apptainer_flags=(
     "--env" "EDITOR=vim"
     "--bind" "$HOME/.config/firecrawl-cli:/home/user/.config/firecrawl-cli"
 )
+[[ -e "$HOME/.gitconfig" ]] && apptainer_flags+=(
+    "--bind" "$HOME/.gitconfig:/home/user/.gitconfig:ro"
+)
 [[ "$gpu" == true ]] && apptainer_flags+=("--nv")
 
 # we keep track of all paths (inside the container) that we want to add to PATH to make
