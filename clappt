@@ -317,7 +317,7 @@ for raw_stage_dir in "${raw_stage_dirs[@]}"; do
     stage_dir_modes+=("$stage_dir_mode")
 done
 
-container_pwd="/work"
+container_pwd=""
 
 stage_dir() {
     local host_dir="$1"
@@ -330,7 +330,7 @@ stage_dir() {
     work_dir_name=$(basename "$host_dir")
     work_dir_hash=$(printf "%s" "$host_dir" | sha256sum | cut -c1-12)
     masked_work_dir="/work/${work_dir_hash}/${work_dir_name}"
-    if [[ "$stage_dirs_set" == false ]]; then
+    if [[ -z "$container_pwd" ]]; then
         container_pwd="$masked_work_dir"
     fi
 

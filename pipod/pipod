@@ -236,7 +236,7 @@ for raw_stage_dir in "${raw_stage_dirs[@]}"; do
     stage_dir_modes+=("$stage_dir_mode")
 done
 
-container_pwd=/work
+container_pwd=""
 declare -A staged_names=()
 stage_dir() {
     local host_dir="$1"
@@ -255,7 +255,9 @@ stage_dir() {
     else
         masked_work_dir="/work/$work_dir_hash/$work_dir_name"
     fi
-    [[ "$stage_dirs_set" == true ]] || container_pwd="$masked_work_dir"
+    if [[ -z "$container_pwd" ]]; then
+        container_pwd="$masked_work_dir"
+    fi
     mounts+=(--volume "$host_dir:$masked_work_dir$bind_mode")
 
     if [[ -f "$host_dir/pixi.toml" && -z "$bind_mode" ]]; then

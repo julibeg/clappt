@@ -68,7 +68,7 @@ NVIDIA Container Toolkit. This is a manual fallback for older Podman versions;
 prefer CDI when it becomes available on the host.
 
 Use `--stage-dirs /path/one,/path/two:ro` to mount several absolute paths. The
-container starts in a temporary, writable `/work`. Each path is masked as
+container starts in the first staged directory. Each path is masked as
 `/work/<hash>/<basename>`; `:ro` makes one path read-only. Add
 `--flat-stage-dirs` to mount them as `/work/<basename>` instead. Duplicate
 basenames then fail rather than sharing a mount point. Linked Git worktrees

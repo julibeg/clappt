@@ -60,7 +60,7 @@ work_mount=$(grep -E '^[^:]+:/work$' <<<"$output")
 work_line=$(grep -n -E '^[^:]+:/work$' <<<"$output" | cut -d: -f1)
 rw_line=$(grep -n -F "$rw_dir:/work/$rw_hash/rw" <<<"$output" | cut -d: -f1)
 ((work_line < rw_line))
-[[ "$output" == *$'--workdir\n/work'* ]]
+[[ "$output" == *$'--workdir\n/work/'"$rw_hash"$'/rw'* ]]
 
 for expected in \
     "--pids-limit=-1" \
@@ -101,6 +101,7 @@ for expected in \
         exit 1
     }
 done
+[[ "$flat_output" == *$'--workdir\n/work/rw'* ]]
 
 mkdir -p "$tmp_dir/a/same" "$tmp_dir/b/same"
 if error_output=$(

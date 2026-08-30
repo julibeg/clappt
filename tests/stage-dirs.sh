@@ -48,7 +48,7 @@ rw_line=$(grep -n -F "$rw_dir:/work/$rw_hash/rw" <<<"$output" | cut -d: -f1)
 grep -Fx -- "$rw_dir:/work/$rw_hash/rw" <<<"$output"
 grep -Fx -- "$ro_dir:/work/$ro_hash/ro:ro" <<<"$output"
 grep -Fx -- "$rw_dir/.pixi-containers:/work/$rw_hash/rw/.pixi" <<<"$output"
-[[ "$output" == *$'--pwd\n/work'* ]]
+[[ "$output" == *$'--pwd\n/work/'"$rw_hash"$'/rw'* ]]
 [[ ! -e "$ro_dir/.pixi-containers" ]]
 if grep -F -- "$ro_dir/.pixi-containers:" <<<"$output"; then
     exit 1
