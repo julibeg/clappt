@@ -25,6 +25,24 @@ run_tests() {
             set -euo pipefail
             test "$(id -u):$(id -g)" = 1001:1001
             git --version
+            hook_repo=$(mktemp -d)
+            git -C "$hook_repo" init --quiet
+            git -C "$hook_repo" config user.name Test
+            git -C "$hook_repo" config user.email test@example.com
+            git -C "$hook_repo" commit --quiet --allow-empty \
+                -m Subject -m "Short body."
+            long_line=$(printf "%073d" 0)
+            printf "%s\n" "$long_line" >"$hook_repo/long-subject"
+            printf "Subject\n\n%s\n" "$long_line" >"$hook_repo/long-body"
+            for message in "$hook_repo/long-subject" "$hook_repo/long-body"; do
+                if git -C "$hook_repo" commit --quiet --allow-empty \
+                    -F "$message" 2>"$hook_repo/error"; then
+                    echo "Long commit-message line was accepted" >&2
+                    exit 1
+                fi
+                grep -F "exceeds 72 characters" "$hook_repo/error"
+            done
+            rm -rf "$hook_repo"
             fd --version
             rg --version
             python --version

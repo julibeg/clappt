@@ -91,6 +91,9 @@ RUN curl -fsSL https://chatgpt.com/codex/install.sh \
     | env CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin \
         CODEX_NON_INTERACTIVE=1 sh
 
+COPY --chmod=755 commit-msg-hook /usr/local/share/git-hooks/commit-msg
+RUN git config --system core.hooksPath /usr/local/share/git-hooks
+
 USER user
 RUN curl -fsSL https://claude.ai/install.sh | bash
 

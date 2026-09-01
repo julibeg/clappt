@@ -17,7 +17,8 @@ The image is based on Microsoft's Ubuntu Noble Playwright image and includes:
   environment with Python, Ruff, fd, ripgrep, pandas, NumPy, Matplotlib,
   Seaborn, SciPy, and scikit-learn
 - Firecrawl CLI
-- Git, build tools, jq, Vim, PDF tools, and ImageMagick
+- Git, with a commit hook rejecting message lines longer than 72 characters
+- Build tools, jq, Vim, PDF tools, and ImageMagick
 
 From the repository root:
 
