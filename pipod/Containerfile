@@ -4,15 +4,22 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
-# Keep package pins at least MINIMUM_RELEASE_AGE old when updating them.
-ARG PNPM_VERSION=11.22.0
-ARG MINIMUM_RELEASE_AGE=2880
+# npm measures minimum release age in days; pnpm measures it in minutes.
+# Having an env var for both is the least annoying option, despite the duplication.
+# Keep package pins at least MINIMUM_RELEASE_AGE_DAYS old when updating them.
+# Also, make sure days and minutes match (otherwise RUN guard below will trigger)
+ARG PNPM_VERSION=11.24.0
+ARG MINIMUM_RELEASE_AGE_DAYS=2
+ARG MINIMUM_RELEASE_AGE_MINUTES=2880
 ARG FIRECRAWL_VERSION=1.19.27
 ARG FD_VERSION=10.4.2
 ARG PYTHON_VERSION=3.13.14
 ARG RIPGREP_VERSION=15.2.0
 ARG RUFF_VERSION=0.15.22
 ARG PIXI_VERSION=0.66.0
+
+RUN test "$((MINIMUM_RELEASE_AGE_DAYS * 1440))" -eq "$MINIMUM_RELEASE_AGE_MINUTES" \
+    || { echo "ERROR: release age values do not match" >&2; exit 1; }
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
@@ -38,8 +45,8 @@ ENV HOME=/home/user \
     PATH=/home/user/.cargo/bin:/home/user/.local/bin:/home/user/.pixi/bin:/usr/local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     DISABLE_AUTOUPDATER=1 \
-    NPM_CONFIG_MIN_RELEASE_AGE=$MINIMUM_RELEASE_AGE \
-    PNPM_CONFIG_MINIMUM_RELEASE_AGE=$MINIMUM_RELEASE_AGE
+    NPM_CONFIG_MIN_RELEASE_AGE=$MINIMUM_RELEASE_AGE_DAYS \
+    PNPM_CONFIG_MINIMUM_RELEASE_AGE=$MINIMUM_RELEASE_AGE_MINUTES
 
 COPY --from=uv /uv /usr/local/bin/uv
 
@@ -67,17 +74,17 @@ ENV PNPM_HOME=/usr/local/share/pnpm \
 RUN npm install --global --ignore-scripts "pnpm@$PNPM_VERSION" \
     && rm -rf /root/.npm
 
-RUN HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+RUN HOME=/root pnpm \
     add --global --ignore-scripts "playwright@$PLAYWRIGHT_VERSION"
 
 # Keep frequently updated agents late and refresh them on every image build.
 ARG AGENT_CACHE_BUST
 RUN : "$AGENT_CACHE_BUST" \
-    && HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+    && HOME=/root pnpm \
         add --global --ignore-scripts \
             "@earendil-works/pi-coding-agent" \
             "firecrawl-cli@$FIRECRAWL_VERSION" \
-    && HOME=/root pnpm --config.minimum-release-age="$MINIMUM_RELEASE_AGE" \
+    && HOME=/root pnpm \
         add --global --allow-build=node-pty t3
 
 RUN curl -fsSL https://chatgpt.com/codex/install.sh \

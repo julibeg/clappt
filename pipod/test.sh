@@ -37,7 +37,7 @@ run_tests() {
             ruff --version
             uv --version
             shellcheck --version
-            npm config get min-release-age | grep -Fx 2880
+            npm config get min-release-age | grep -Fx 2
             pnpm --version
             pnpm config get minimumReleaseAge | grep -Fx 2880
             pixi --version
