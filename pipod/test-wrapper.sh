@@ -42,6 +42,7 @@ for flag in -h --help; do
         "--publish ADDRESS" \
         "--stage-dirs DIRS" \
         "--flat-stage-dirs" \
+        "--remote-img" \
         "--image IMAGE" \
         "Special commands: sol, terra, luna (no arguments)"; do
         grep -Fq -- "$expected" <<<"$help_output"
@@ -117,6 +118,10 @@ fi
 [[ "$output" == *$'pi\n--version' ]]
 output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" echo hi)
 [[ "$output" == *$'echo\nhi' ]]
+remote_output=$(
+    HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/pipod" --remote-img echo hi
+)
+[[ "$remote_output" == *$'docker.io/julibeg/pipod:latest\necho\nhi' ]]
 if grep -Eq '^[^:]+:/work$' <<<"$output"; then
     exit 1
 fi

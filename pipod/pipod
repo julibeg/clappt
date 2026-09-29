@@ -20,6 +20,7 @@ Options:
   --publish ADDRESS      Publish a container port
   --stage-dirs DIRS      Comma-separated absolute directories to mount
   --flat-stage-dirs      Mount staged directories directly under /work
+  --remote-img           Use docker.io/julibeg/pipod:latest
   --image IMAGE          Container image (default: $IMAGE)
 
 Special commands: sol, terra, luna (no arguments)
@@ -49,6 +50,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --flat-stage-dirs)
         flat_stage_dirs=true
+        shift
+        ;;
+    --remote-img)
+        IMAGE="docker.io/julibeg/pipod:latest"
         shift
         ;;
     --image)

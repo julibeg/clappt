@@ -56,6 +56,7 @@ Example commands:
 ./pipod/pipod codex
 ./t3pod/t3pod /path/to/project
 ./pipod/pipod --gpu
+./pipod/pipod --remote-img
 ./pipod/pipod --publish 8000:8000 -- uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
