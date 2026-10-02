@@ -49,8 +49,7 @@ run_tests() {
             python3 --version
             test "$MPLCONFIGDIR" = /home/user/.cache/matplotlib
             test "$UV_LINK_MODE" = copy
-            test "$UV_PROJECT_ENVIRONMENT" = /opt/uv-project-environment
-            test -w "$UV_PROJECT_ENVIRONMENT"
+            test "$UV_PROJECT_ENVIRONMENT" = .venv-containers
             python -c "import matplotlib, numpy, pandas, scipy, seaborn, sklearn"
             ruff --version
             uv --version

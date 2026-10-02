@@ -32,7 +32,6 @@ RUN apt-get update \
 RUN test "$(id -u pwuser):$(id -g pwuser)" = 1001:1001 \
     && usermod --login user --home /home/user --move-home pwuser \
     && groupmod --new-name user pwuser \
-    && install -d -o user -g user /opt/uv-project-environment \
     && echo 'export PATH="/home/user/.cargo/bin:$PATH"' \
         >/etc/profile.d/pipod-path.sh
 
@@ -41,7 +40,7 @@ ENV HOME=/home/user \
     LOGNAME=user \
     MPLCONFIGDIR=/home/user/.cache/matplotlib \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/opt/uv-project-environment \
+    UV_PROJECT_ENVIRONMENT=.venv-containers \
     SHELL=/bin/bash \
     PATH=/home/user/.cargo/bin:/home/user/.local/bin:/home/user/.pixi/bin:/usr/local/share/pnpm/bin:/usr/local/bin:/usr/bin:/bin \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \

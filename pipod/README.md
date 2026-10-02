@@ -76,6 +76,11 @@ container starts in the first staged directory. Each path is masked as
 basenames then fail rather than sharing a mount point. Linked Git worktrees
 are handled automatically. Pixi projects use `.pixi-containers` for
 a container-specific environment instead of reusing the host `.pixi` directory.
+uv uses `.venv-containers` in each project or uv workspace root, leaving the
+host `.venv` untouched. This applies to CLI and T3 sessions, including separate
+Git worktrees. Add `.venv-containers/` to your project's `.gitignore`. These
+environments persist in mounted directories and can be deleted when not in use;
+`uv run` or `uv sync` recreates them.
 
 The wrapper mounts agent state from `~/.claude`, `~/.codex`, and `~/.pi`, plus
 T3 Code state from `~/.t3-container-state`. A
