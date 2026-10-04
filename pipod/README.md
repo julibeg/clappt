@@ -95,6 +95,17 @@ Rootless Podman's `keep-id` user namespace maps the host user to the image's
 neutral `user` account, keeping bind-mounted files writable. SELinux labeling
 is disabled so pipod does not relabel agent configuration or project paths.
 
+## Temporary Codex updates
+
+Run `update-codex` inside a running pipod container, then restart Codex. It
+reruns the native installer into user-writable `/opt/codex`, with the command
+symlink in `~/.local/bin`. Credentials and configuration still use mounted
+`~/.codex`; the installer does not modify that directory.
+
+Use `update-codex`, not `codex update`: the built-in updater cannot recognize
+this split installation layout. Updates last only until that container is
+removed. A new container starts with the image's Codex version.
+
 ## pnpm and host installs
 
 Build-time pnpm installs do not use the host pnpm store or global packages. At

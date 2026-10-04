@@ -87,14 +87,14 @@ RUN : "$AGENT_CACHE_BUST" \
     && HOME=/root pnpm \
         add --global --allow-build=node-pty "t3@$T3_VERSION"
 
-RUN curl -fsSL https://chatgpt.com/codex/install.sh \
-    | env CODEX_HOME=/opt/codex CODEX_INSTALL_DIR=/usr/local/bin \
-        CODEX_NON_INTERACTIVE=1 sh
+COPY --chmod=755 update-codex /usr/local/bin/update-codex
+RUN install -d -o user -g user /opt/codex
 
 COPY --chmod=755 commit-msg-hook /usr/local/share/git-hooks/commit-msg
 RUN git config --system core.hooksPath /usr/local/share/git-hooks
 
 USER user
+RUN update-codex
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 COPY --chown=user:user container-entrypoint /usr/local/bin/container-entrypoint
