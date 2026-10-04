@@ -40,6 +40,9 @@ debug_output=$(
     HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/t3pod" --debug "$project"
 )
 [[ "$debug_output" == *$'bash' ]]
+[[ $(HOME="$home" PATH="$bin:/usr/bin:/bin" \
+    "$script_dir/t3pod" --remote-img --debug "$project") == \
+    *$'docker.io/julibeg/pipod:latest\nbash' ]]
 if grep -Fqx -- "127.0.0.1:3773:3773" <<<"$debug_output"; then
     echo "Debug mode published the T3 port" >&2
     exit 1

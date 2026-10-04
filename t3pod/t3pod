@@ -4,13 +4,18 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 pipod="$script_dir/../pipod/pipod"
 debug=false
-if [[ "${1:-}" == --debug ]]; then
-    debug=true
+pipod_args=(--flat-stage-dirs)
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+    --debug) debug=true ;;
+    --remote-img) pipod_args+=(--remote-img) ;;
+    *) break ;;
+    esac
     shift
-fi
+done
 
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 [--debug] PROJECT_DIR [PROJECT_DIR ...]" >&2
+    echo "Usage: $0 [--debug] [--remote-img] PROJECT_DIR [PROJECT_DIR ...]" >&2
     exit 1
 fi
 
@@ -24,7 +29,6 @@ for project_dir in "$@"; do
     project_dirs+=("$project_dir")
 done
 
-pipod_args=(--flat-stage-dirs)
 if [[ ${#project_dirs[@]} -eq 1 ]]; then
     cd "${project_dirs[0]}"
 else
