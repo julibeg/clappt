@@ -16,6 +16,12 @@ printf '%s\n' "$@"
 EOF
 chmod +x "$bin/podman"
 
+for flag in -h --help; do
+    help_output=$("$script_dir/t3pod" "$flag")
+    [[ "$help_output" == *"Usage: t3pod [OPTIONS]"* ]]
+    [[ "$help_output" == *"--remote-img"* ]]
+done
+
 output=$(HOME="$home" PATH="$bin:/usr/bin:/bin" "$script_dir/t3pod" "$project")
 for expected in \
     "127.0.0.1:3773:3773" \

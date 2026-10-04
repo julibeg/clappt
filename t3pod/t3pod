@@ -3,10 +3,22 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 pipod="$script_dir/../pipod/pipod"
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS] PROJECT_DIR [PROJECT_DIR ...]
+
+Options:
+  -h, --help    Show this help message
+  --debug       Start a shell instead of T3 Code
+  --remote-img  Use docker.io/julibeg/pipod:latest
+EOF
+}
+
 debug=false
 pipod_args=(--flat-stage-dirs)
-while [[ "${1:-}" == --* ]]; do
+while [[ "${1:-}" == -* ]]; do
     case "$1" in
+    -h|--help) usage; exit 0 ;;
     --debug) debug=true ;;
     --remote-img) pipod_args+=(--remote-img) ;;
     *) break ;;
@@ -15,7 +27,7 @@ while [[ "${1:-}" == --* ]]; do
 done
 
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 [--debug] [--remote-img] PROJECT_DIR [PROJECT_DIR ...]" >&2
+    usage >&2
     exit 1
 fi
 
