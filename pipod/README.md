@@ -116,10 +116,13 @@ the mounted `~/.pi` state keep working; host global packages remain isolated. A
 different host pnpm version is normally harmless. npm is used only to bootstrap
 pnpm; pnpm installs Pi, Firecrawl, and Playwright with `--ignore-scripts`.
 T3 Code allows only `node-pty`'s required native build. Each image build installs
-the latest Claude and Codex releases and refreshes Pi and T3 Code to the newest
-releases allowed by pnpm's 2,880-minute (48-hour) minimum release age. Runtime
-npm and pnpm commands enforce the same release age through environment
-overrides, independent of host configuration.
+the latest Claude and Codex releases and refreshes Pi, Firecrawl, and T3 Code to
+the newest releases allowed by pnpm's 2,880-minute (48-hour) minimum release age.
+Playwright is exactly pinned to match the image's bundled browsers; pnpm stays
+on major version 12 and Python on minor version 3.13. Other tools float, but
+cached installation layers only refresh when invalidated. Runtime npm and pnpm
+commands enforce the same release age through environment overrides,
+independent of host configuration.
 
 Do not reuse host-created `node_modules` when host and container Node versions or
 platform libraries differ. Native addons and generated executable shims can be

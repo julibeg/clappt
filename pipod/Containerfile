@@ -1,23 +1,16 @@
 ARG PLAYWRIGHT_VERSION=1.63.0
-ARG UV_VERSION=0.12.17
-FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+FROM ghcr.io/astral-sh/uv:latest AS uv
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
 # npm measures minimum release age in days; pnpm measures it in minutes.
 # Having an env var for both is the least annoying option, despite the duplication.
-# Keep package pins at least MINIMUM_RELEASE_AGE_DAYS old when updating them.
+# Keep exact package pins at least MINIMUM_RELEASE_AGE_DAYS old when updating.
 # Also, make sure days and minutes match (otherwise RUN guard below will trigger)
-ARG PNPM_VERSION=12.6.0
+ARG PNPM_VERSION=12
 ARG MINIMUM_RELEASE_AGE_DAYS=2
 ARG MINIMUM_RELEASE_AGE_MINUTES=2880
-ARG FIRECRAWL_VERSION=1.24.4
-ARG T3_VERSION=0.0.45
-ARG FD_VERSION=10.5.0
-ARG PYTHON_VERSION=3.13.14
-ARG RIPGREP_VERSION=15.2.0
-ARG RUFF_VERSION=0.16.8
-ARG PIXI_VERSION=0.81.0
+ARG PYTHON_VERSION=3.13.*
 
 RUN test "$((MINIMUM_RELEASE_AGE_DAYS * 1440))" -eq "$MINIMUM_RELEASE_AGE_MINUTES" \
     || { echo "ERROR: release age values do not match" >&2; exit 1; }
@@ -51,7 +44,7 @@ ENV HOME=/home/user \
 COPY --from=uv /uv /usr/local/bin/uv
 
 RUN curl -fsSL https://pixi.sh/install.sh \
-    | env PIXI_VERSION="v$PIXI_VERSION" PIXI_BIN_DIR=/usr/local/bin \
+    | env PIXI_BIN_DIR=/usr/local/bin \
         PIXI_NO_PATH_UPDATE=1 bash
 
 USER user
@@ -61,9 +54,8 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
 RUN pixi global install --environment cli-utils \
     --expose fd --expose python --expose python3=python \
     --expose rg --expose ruff \
-    "fd-find=$FD_VERSION" matplotlib numpy pandas "python=$PYTHON_VERSION" \
-    scikit-learn scipy seaborn \
-    "ripgrep=$RIPGREP_VERSION" "ruff=$RUFF_VERSION"
+    fd-find matplotlib numpy pandas "python=$PYTHON_VERSION" \
+    scikit-learn scipy seaborn ripgrep ruff
 
 USER root
 ENV PNPM_HOME=/usr/local/share/pnpm \
@@ -83,9 +75,9 @@ RUN : "$AGENT_CACHE_BUST" \
     && HOME=/root pnpm \
         add --global --ignore-scripts \
             "@earendil-works/pi-coding-agent" \
-            "firecrawl-cli@$FIRECRAWL_VERSION" \
+            "firecrawl-cli" \
     && HOME=/root pnpm \
-        add --global --allow-build=node-pty "t3@$T3_VERSION"
+        add --global --allow-build=node-pty t3
 
 COPY --chmod=755 update-codex /usr/local/bin/update-codex
 RUN install -d -o user -g user /opt/codex
