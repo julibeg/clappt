@@ -6,12 +6,14 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
 home="$tmp_dir/home"
+chrome_config_dir="$home/.config/google-chrome-for-testing"
 bin="$tmp_dir/bin"
 rw_dir="$tmp_dir/rw"
 ro_dir="$tmp_dir/ro"
 mkdir -p "$home/.claude" "$home/.codex" "$home/.pi/agent" \
     "$home/.cache/uv" "$home/.config/pnpm" \
-    "$home/.config/firecrawl-cli" "$home/.local/share/claude" \
+    "$home/.config/firecrawl-cli" "$chrome_config_dir" \
+    "$home/.local/share/claude" \
     "$home/.local/share/pnpm/store" "$bin"
 mkdir -p "$home/agent-targets"/{claude,codex,pi} "$rw_dir" "$ro_dir"
 ln -s ../agent-targets/claude "$home/.claude/skills"
@@ -77,6 +79,7 @@ for expected in \
     "$home/agent-targets/pi:/home/user/agent-targets/pi" \
     "$home/.cache:/home/user/.cache" \
     "$home/.config/firecrawl-cli:/home/user/.config/firecrawl-cli" \
+    "$chrome_config_dir:/home/user/.config/google-chrome-for-testing" \
     "$home/.local/share/pnpm/store:/home/user/.local/share/pnpm/store" \
     "$home/.t3-container-state:/data" \
     "$rw_dir:/work/$rw_hash/rw" \

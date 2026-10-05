@@ -69,6 +69,7 @@ trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
 
 # prepare temp home dir for the container
 tmp_home="${tmp_dir}/home"
+chrome_config_dir="$HOME/.config/google-chrome-for-testing"
 mkdir -p "$tmp_home"
 
 if [[ "$test_hooks" == true ]]; then
@@ -126,6 +127,7 @@ apptainer_flags=(
     # some other bits
     "--env" "EDITOR=vim"
     "--bind" "$HOME/.config/firecrawl-cli:/home/user/.config/firecrawl-cli"
+    "--bind" "$chrome_config_dir:/home/user/.config/google-chrome-for-testing"
 )
 [[ -e "$HOME/.gitconfig" ]] && apptainer_flags+=(
     "--bind" "$HOME/.gitconfig:/home/user/.gitconfig:ro"

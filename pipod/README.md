@@ -88,9 +88,10 @@ T3 Code state from `~/.t3-container-state`. A
 top-level relative symlink in `~/.claude`, `~/.codex`, or `~/.pi/agent` gets its
 resolved target mounted at the corresponding relative container path. This also
 keeps existing Claude hooks working. Absolute symlinks work but expose their
-target path and produce a warning. Firecrawl's `~/.config/firecrawl-cli` and
-`~/.cache` are writable; `~/.gitconfig` is read-only. The rest of host
-`~/.config` is not mounted.
+target path and produce a warning. Firecrawl's `~/.config/firecrawl-cli`,
+Chrome for Testing's `~/.config/google-chrome-for-testing`, and `~/.cache` are
+writable; `~/.gitconfig` is read-only. The rest of host `~/.config` is not
+mounted.
 
 Rootless Podman's `keep-id` user namespace maps the host user to the image's
 neutral `user` account, keeping bind-mounted files writable. SELinux labeling

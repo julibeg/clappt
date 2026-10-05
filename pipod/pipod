@@ -165,6 +165,8 @@ mkdir -p "$HOME/.config"
 install -d -m 700 "$HOME/.config/firecrawl-cli"
 mount_if_present "$HOME/.config/firecrawl-cli" \
     /home/user/.config/firecrawl-cli
+mount_if_present "$HOME/.config/google-chrome-for-testing" \
+    /home/user/.config/google-chrome-for-testing
 mkdir -p "$HOME/.cache/uv"
 mount_if_present "$HOME/.cache" /home/user/.cache
 mount_if_present "$HOME/.gitconfig" /home/user/.gitconfig :ro
